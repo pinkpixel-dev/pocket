@@ -2,6 +2,18 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.5.1 - September 7, 2026
+
+### 🐛 Fixes
+
+- Applying a tidy-up plan with nothing ticked did nothing and said nothing. On a tag list that is mostly single-use tags the AI proposes mostly deletions, and deletions start unticked, so Apply sat disabled and pressing it looked like a broken button. Apply now stays pressable whenever the plan has actions and tells you when nothing is ticked
+- Both tidy-up dialogs now report the real outcome by counting the list again after applying, so a plan that changed nothing says so instead of claiming success
+- Added a "Tick everything" control to the tag plan, and a line saying how many tags the ticked actions actually remove
+
+### 🏷️ Tags
+
+- The tag tidy-up prompt now prefers folding a one-off tag into a broader tag that is already in use over deleting it, covers narrow-to-broad merges like "arch linux" into "linux", and is told to group sources into fewer, larger actions rather than returning a handful of pairs
+
 ## 1.5.0 - September 7, 2026
 
 ### 🏷️ Tags

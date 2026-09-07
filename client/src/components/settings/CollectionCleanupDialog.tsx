@@ -62,7 +62,11 @@ export function CollectionCleanupDialog({ open, onClose, onApplied }: Collection
   const chosen = actions.filter((action, index) => !skipped.has(actionKey(action, index)));
 
   const handleApply = async () => {
-    if (chosen.length === 0) return;
+    if (chosen.length === 0) {
+      toast.info('Nothing is ticked, so nothing changed. Tick an action first.');
+      return;
+    }
+
     setApplying(true);
 
     let merged = 0;
@@ -101,11 +105,16 @@ export function CollectionCleanupDialog({ open, onClose, onApplied }: Collection
         for (const source of action.sources) byName.delete(source.name.toLowerCase());
       }
 
+      const after = (await api.listCollections()).collections.length;
       const parts = [
         merged > 0 ? `merged ${pluralize(merged, 'collection')}` : '',
         converted > 0 ? `turned ${pluralize(converted, 'collection')} into tags` : '',
       ].filter(Boolean);
-      toast.success(`Tidied up: ${parts.join(', ')}.`);
+      toast.success(
+        parts.length > 0
+          ? `Tidied up: ${parts.join(', ')}. ${after} left.`
+          : `Applied, but nothing changed. Still ${after} collections.`,
+      );
       onApplied();
       onClose();
     } catch (err) {
@@ -133,7 +142,7 @@ export function CollectionCleanupDialog({ open, onClose, onApplied }: Collection
             variant="primary"
             onClick={() => void handleApply()}
             loading={applying}
-            disabled={loading || chosen.length === 0}
+            disabled={loading || actions.length === 0}
           >
             Apply {chosen.length > 0 ? `(${chosen.length})` : ''}
           </Button>

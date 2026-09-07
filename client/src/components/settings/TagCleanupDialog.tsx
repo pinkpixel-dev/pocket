@@ -73,29 +73,37 @@ export function TagCleanupDialog({ open, onClose, onApplied }: TagCleanupDialogP
   const actions = plan?.actions ?? [];
   const chosen = actions.filter((action, index) => !skipped.has(actionKey(action, index)));
   const deleting = chosen.filter((action) => action.kind === 'delete').length;
+  // Every source disappears, whether it is folded into another tag or removed.
+  const ticked = chosen.reduce((total, action) => total + action.sources.length, 0);
 
   const handleApply = async () => {
-    if (chosen.length === 0) return;
-    setApplying(true);
+    // Ticking nothing and pressing Apply used to look like a broken button.
+    if (chosen.length === 0) {
+      toast.info('Nothing is ticked, so nothing changed. Tick an action first.');
+      return;
+    }
 
-    let merged = 0;
-    let removed = 0;
+    setApplying(true);
+    const before = plan?.tagCount ?? 0;
 
     try {
       for (const action of chosen) {
         const ids = action.sources.map((source) => source.id);
         if (action.kind === 'delete') {
-          removed += (await api.bulkDeleteTags(ids)).deleted;
+          await api.bulkDeleteTags(ids);
         } else {
-          merged += (await api.mergeTags(ids, action.target)).merged;
+          await api.mergeTags(ids, action.target);
         }
       }
 
-      const parts = [
-        merged > 0 ? `merged ${pluralize(merged, 'tag')}` : '',
-        removed > 0 ? `removed ${pluralize(removed, 'tag')}` : '',
-      ].filter(Boolean);
-      toast.success(`Tidied up: ${parts.join(', ')}.`);
+      // Counting the list again is the only honest report. Adding up what each
+      // call claimed hides a plan that turned out to be a no-op.
+      const after = (await api.listTags()).tags.length;
+      toast.success(
+        after < before
+          ? `Tidied up: ${before} tags down to ${after}.`
+          : `Applied, but the tag count did not change. It is still ${after}.`,
+      );
       onApplied();
       onClose();
     } catch (err) {
@@ -123,7 +131,7 @@ export function TagCleanupDialog({ open, onClose, onApplied }: TagCleanupDialogP
             variant="primary"
             onClick={() => void handleApply()}
             loading={applying}
-            disabled={loading || chosen.length === 0}
+            disabled={loading || actions.length === 0}
           >
             Apply {chosen.length > 0 ? `(${chosen.length})` : ''}
           </Button>
@@ -151,13 +159,29 @@ export function TagCleanupDialog({ open, onClose, onApplied }: TagCleanupDialogP
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-[0.875rem] text-ink-muted">
-            {plan?.tagCount} tags today
-            {plan && plan.singletonCount > 0
-              ? `, ${plan.singletonCount} used on a single bookmark`
-              : ''}
-            . Merges are ticked. Deletions are not, since they lose the label instead of moving it.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="text-[0.875rem] text-ink-muted">
+              {plan?.tagCount} tags today
+              {plan && plan.singletonCount > 0
+                ? `, ${plan.singletonCount} used on a single bookmark`
+                : ''}
+              . This plan removes {ticked}, leaving about {Math.max(0, (plan?.tagCount ?? 0) - ticked)}.
+              Merges are ticked. Deletions are not, since they lose the label instead of moving it.
+            </p>
+            <button
+              type="button"
+              onClick={() =>
+                setSkipped(
+                  skipped.size > 0
+                    ? new Set()
+                    : new Set(actions.map((action, index) => actionKey(action, index))),
+                )
+              }
+              className="shrink-0 text-[0.8125rem] text-accent hover:underline focus:outline-none"
+            >
+              {skipped.size > 0 ? 'Tick everything' : 'Untick everything'}
+            </button>
+          </div>
 
           <ul className="flex flex-col gap-2">
             {actions.map((action, index) => {

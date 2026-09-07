@@ -238,6 +238,7 @@ export async function suggestTagCleanup(): Promise<TagCleanupPlan> {
   }
 
   const reviewed = tags.slice(0, TAG_REVIEW_LIMIT);
+  const singles = reviewed.filter((tag) => tag.bookmarkCount <= 1);
   const target = Math.max(10, Math.round(reviewed.length / 4));
 
   const input = [
@@ -245,14 +246,16 @@ export async function suggestTagCleanup(): Promise<TagCleanupPlan> {
     reviewed.map((tag) => `- ${tag.name} (${tag.bookmarkCount})`).join('\n'),
     '',
     'Rules:',
-    `- Aim to land near ${target} tags once your actions are applied.`,
+    `- Aim to land near ${target} tags once your actions are applied. That means folding most of the ${singles.length} tags used only once into tags that are already shared.`,
     '- Merge synonyms, plurals, hyphenations and rephrasings into the one that is already used most. "llm", "llms" and "large language models" are one tag.',
-    '- Merge a tag that is a wordier version of another into the shorter one.',
-    '- Propose deleting a tag only when it groups nothing and never will: a tag on one bookmark that says something no other link would ever say.',
+    '- Merge a tag that is a wordier version of another into the shorter one. "shell commands" and "command-line" belong with "shell".',
+    '- Also merge a narrow tag into the broader tag it is an example of, when the broader one is already in use. "arch linux" belongs with "linux", "gmail" with "email".',
+    '- Deleting is the last resort. Prefer merging a one-off tag into something broader. Propose a delete only when no tag in the list is even related to it.',
     '- Leave a tag alone when it is already shared and distinct. Say nothing about it.',
     '- Never merge tags that mean different things just to reach the number.',
     '- Every name in sources must be copied exactly from the list above. Use each tag at most once.',
     '- A merge target should be a tag from the list. Only name a new one when the shared word is missing entirely.',
+    `- Be thorough. A plan of five actions for ${reviewed.length} tags is not worth reviewing. Group every source you can into each action instead of returning one action per pair.`,
   ].join('\n');
 
   const parsed = await callAiJson<{
