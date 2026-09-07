@@ -2,89 +2,6 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
-## 1.5.1 - September 7, 2026
-
-### 🐛 Fixes
-
-- Applying a tidy-up plan with nothing ticked did nothing and said nothing. On a tag list that is mostly single-use tags the AI proposes mostly deletions, and deletions start unticked, so Apply sat disabled and pressing it looked like a broken button. Apply now stays pressable whenever the plan has actions and tells you when nothing is ticked
-- Both tidy-up dialogs now report the real outcome by counting the list again after applying, so a plan that changed nothing says so instead of claiming success
-- Added a "Tick everything" control to the tag plan, and a line saying how many tags the ticked actions actually remove
-
-### 🏷️ Tags
-
-- The tag tidy-up prompt now prefers folding a one-off tag into a broader tag that is already in use over deleting it, covers narrow-to-broad merges like "arch linux" into "linux", and is told to group sources into fewer, larger actions rather than returning a handful of pairs
-
-## 1.5.0 - September 7, 2026
-
-### 🏷️ Tags
-
-- The AI now sees the tags your library already uses, busiest first, whenever it files a bookmark. It is told to reuse them and never to invent a synonym or a plural of a tag that already exists. The batch filing pass was not being shown the tag list at all, which is where most of the duplication came from
-- New "Tidy up with AI" action above the tag list. It folds synonyms, plurals and rephrasings into the tag that is already used most, and flags tags that group nothing. Merges start ticked, deletions do not
-- Tags can be selected in bulk and merged into one name, or deleted together
-- Merging into a name the library does not have yet creates it. A bookmark that already carried the target tag does not end up with it twice
-- The single-bookmark AI pass now sees 80 tags instead of 40, ordered by use rather than arbitrarily
-
-### 🛠️ API
-
-- Add `POST /api/tags/merge`, `POST /api/tags/bulk-delete` and `POST /api/ai/suggest-tag-cleanup`
-
-## 1.4.0 - September 7, 2026
-
-### 🧭 Sidebar
-
-- The sidebar can be resized. Drag its right edge, or focus it and use the arrow keys, Home and End. Double click or press Enter to go back to the default width
-- The width is remembered in this browser, between 200px and 460px, and only applies on wide screens where the sidebar is a column rather than a drawer
-- Collection and tag names that are too long to fit now show in full on hover
-
-### 🤖 AI naming
-
-- Collection names the AI proposes are now capped at one or two words and 18 characters, and it can no longer join two ideas with "and", "&" or "/". "UI Component libraries & templates" becomes "UI", with the rest carried as tags
-- The rule applies to all three paths: filing a single bookmark, planning a sorting run, and naming a merge target during a tidy-up
-
-## 1.3.0 - September 7, 2026
-
-### 🗂️ Collections
-
-- "Move to collection" can create a collection on the spot. Pick "Create new collection...", type a name, and the bookmark moves into it without closing the dialog first
-- A name that matches an existing collection reuses it instead of failing on the duplicate
-- The move dialog no longer sends you to the sidebar when the library has no collections yet
-
-## 1.2.0 - September 7, 2026
-
-### 🗂️ Collections
-
-- AI sorting now plans before it files. It reads everything in "No collection", proposes a short list of broad collections (roughly one per twelve links), and then files bookmarks into that closed list. A name outside the plan is dropped instead of created, so a run can no longer end with a collection per bookmark
-- The planned collections are shown as chips before sorting starts, and any of them can be dropped
-- Sorting runs through the whole uncollected list in batches of 40 with visible progress, instead of stopping at the first 30
-- New "Tidy up with AI" action above the collection list. It reviews every collection with its size and sample titles, then proposes merges and tag conversions for review. "AI music" and "AI prompting" become "AI", "Creative licensing" and "Open source licensing" become "Licensing"
-- Merging can now keep each old collection name as a tag, on by default in the tidy-up plan and offered as a checkbox in the manual merge dialog
-- The single-bookmark AI pass no longer prefers inventing a collection when it is torn. It reuses the existing broader one and can never create a narrower version of a collection you already have
-
-### 📥 Import
-
-- Remove the "Innermost folder" folder organization option, which was the setting most likely to produce hundreds of one-link collections. Imports that send it now fall back to Smart hierarchy
-
-### 🛠️ API
-
-- Add `POST /api/ai/plan-collections` and `POST /api/ai/suggest-collection-cleanup`
-- `POST /api/ai/suggest-categories` accepts a `collections` list, which is the closed set of names filing may use
-- `POST /api/collections/merge` accepts `tagWithSourceNames`
-- AI failures now answer with 502 and the message OpenAI returned, instead of a generic 500
-
-## 1.1.0 - September 7, 2026
-
-### 🧹 Bulk actions
-
-- Add selection mode to every bookmark view: tap the checkbox button in the toolbar, then tap cards or rows to pick them
-- Select all bookmarks matching the current view, including pages that have not been scrolled into yet, so a full "Needs attention" list can be cleared in one go
-- Delete every selected bookmark at once with a confirmation step that names the count
-- Press Escape or "Done" to leave selection mode
-
-### 🛠️ API
-
-- Add `POST /api/bookmarks/bulk-delete`, which takes up to 1000 ids per request and reports how many rows were removed
-- Cached previews, favicons and covers shared by several deleted bookmarks are now released correctly in one pass
-
 ## 1.0.0 - September 7, 2026
 
 ### 🚀 Release
@@ -92,9 +9,71 @@ All notable changes to Pocket are recorded here. This project follows [semantic 
 - First stable release of Pocket: a private, self-hosted bookmark library designed for home servers and personal NAS storage
 - Single container deployment with zero external database dependencies, storing library data and cached media locally
 
+### 🗂️ Collections
+
+- AI sorting plans before it files. It reads everything in "No collection", proposes a short list of broad collections (roughly one per twelve links), and then files bookmarks into that closed list. A name outside the plan is dropped instead of created, so a run can no longer end with a collection per bookmark
+- The planned collections are shown as chips before sorting starts, and any of them can be dropped
+- Sorting runs through the whole uncollected list in batches of 40 with visible progress
+- "Tidy up with AI" above the collection list reviews every collection with its size and sample titles, then proposes merges and tag conversions for review. "AI music" and "AI prompting" become "AI", "Creative licensing" and "Open source licensing" become "Licensing"
+- Merging can keep each old collection name as a tag, on by default in the tidy-up plan and offered as a checkbox in the manual merge dialog
+- "Move to collection" can create a collection on the spot. Pick "Create new collection...", type a name, and the bookmark moves into it without closing the dialog first. A name that matches an existing collection reuses it instead of failing on the duplicate
+- The move dialog no longer sends you to the sidebar when the library has no collections yet
+- The single-bookmark AI pass no longer prefers inventing a collection when it is torn. It reuses the existing broader one and can never create a narrower version of a collection you already have
+
+### 🏷️ Tags
+
+- The AI sees the tags your library already uses, busiest first, whenever it files a bookmark. It is told to reuse them and never to invent a synonym or a plural of a tag that already exists. The batch filing pass was not being shown the tag list at all, which is where most of the duplication came from
+- "Tidy up with AI" above the tag list folds synonyms, plurals and rephrasings into the tag that is already used most, and flags tags that group nothing. Merges start ticked, deletions do not
+- The tag tidy-up prompt prefers folding a one-off tag into a broader tag that is already in use over deleting it, covers narrow-to-broad merges like "arch linux" into "linux", and groups sources into fewer, larger actions rather than returning a handful of pairs
+- Tags can be selected in bulk and merged into one name, or deleted together
+- Merging into a name the library does not have yet creates it. A bookmark that already carried the target tag does not end up with it twice
+- The single-bookmark AI pass sees 80 tags, ordered by use rather than arbitrarily
+
+### 🧹 Bulk actions
+
+- Selection mode in every bookmark view: tap the checkbox button in the toolbar, then tap cards or rows to pick them
+- Select all bookmarks matching the current view, including pages that have not been scrolled into yet, so a full "Needs attention" list can be cleared in one go
+- Delete every selected bookmark at once with a confirmation step that names the count
+- Press Escape or "Done" to leave selection mode
+
+### 🧭 Sidebar and settings
+
+- The sidebar can be resized. Drag its right edge, or focus it and use the arrow keys, Home and End. Double click or press Enter to go back to the default width
+- The width is remembered in this browser, between 200px and 460px, and only applies on wide screens where the sidebar is a column rather than a drawer
+- Collection and tag names that are too long to fit show in full on hover
+- The collections "Sort:" control sits on its own line beneath the "Tidy up with AI" button, so the panel header reads as a single right-aligned stack
+- An always-visible select-all checkbox sits above both the collections and tags lists, with an indeterminate state for partial selections, so the bulk actions are discoverable without selecting an item first
+
+### 🤖 AI naming
+
+- Collection names the AI proposes are capped at one or two words and 18 characters, and it cannot join two ideas with "and", "&" or "/". "UI Component libraries & templates" becomes "UI", with the rest carried as tags
+- The rule applies to all three paths: filing a single bookmark, planning a sorting run, and naming a merge target during a tidy-up
+
+### 📥 Import
+
+- Smart hierarchy import reads a browser export's folder tree and turns it into a sensible collection layout instead of one collection per folder
+- Remove the "Innermost folder" folder organization option, which was the setting most likely to produce hundreds of one-link collections. Imports that send it fall back to Smart hierarchy
+
 ### 🎨 Appearance
 
-- Reorder accent color palette in Settings Appearance: Gold (default), Blue, Red, Green, Cyan, Purple, Pink, and Teal
+- Accent color palette in Settings Appearance: Gold (default), Blue, Red, Green, Cyan, Purple, Pink, and Teal
+
+### 🛠️ API
+
+- Add `POST /api/bookmarks/bulk-delete`, which takes up to 1000 ids per request and reports how many rows were removed
+- Add `POST /api/ai/plan-collections` and `POST /api/ai/suggest-collection-cleanup`
+- Add `POST /api/tags/merge`, `POST /api/tags/bulk-delete` and `POST /api/ai/suggest-tag-cleanup`
+- `POST /api/ai/suggest-categories` accepts a `collections` list, which is the closed set of names filing may use
+- `POST /api/collections/merge` accepts `tagWithSourceNames`
+- AI failures answer with 502 and the message OpenAI returned, instead of a generic 500
+
+### 🐛 Fixes
+
+- The bookmark list requested a single unpaged page from `/api/bookmarks`, so views capped out at the server's default 200 rows even in an 11k-bookmark library. It now fetches 100 at a time and appends the next page as you reach the bottom, with a "Load more" button as a fallback. Background refreshes merge over the loaded list rather than replacing it, so polling no longer resets scroll
+- Applying a tidy-up plan with nothing ticked did nothing and said nothing. On a tag list that is mostly single-use tags the AI proposes mostly deletions, and deletions start unticked, so Apply sat disabled and pressing it looked like a broken button. Apply now stays pressable whenever the plan has actions and tells you when nothing is ticked
+- Both tidy-up dialogs report the real outcome by counting the list again after applying, so a plan that changed nothing says so instead of claiming success
+- Added a "Tick everything" control to the tag plan, and a line saying how many tags the ticked actions actually remove
+- Cached previews, favicons and covers shared by several deleted bookmarks are released correctly in one pass
 
 ### 🐳 Docker
 
