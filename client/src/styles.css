@@ -36,6 +36,18 @@
   --radius-card: 0.875rem;
 
   --ease-out-soft: cubic-bezier(0.32, 0.72, 0.24, 1);
+
+  /* Previews fade in from CSS alone, so no JavaScript can strand one hidden. */
+  --animate-preview-in: preview-in 0.3s cubic-bezier(0.32, 0.72, 0.24, 1) both;
+}
+
+@keyframes preview-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @layer base {

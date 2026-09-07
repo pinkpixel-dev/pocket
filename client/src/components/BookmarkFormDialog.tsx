@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { SelectField, TextArea, TextField } from './ui/Field';
 import { TagInput } from './TagInput';
+import { CoverPicker } from './CoverPicker';
 import type { Bookmark, BookmarkDraft, Collection, Tag } from '../lib/types';
 
 export type FormMode = 'create' | 'edit';
@@ -18,8 +19,12 @@ interface BookmarkFormDialogProps {
   defaultCollectionId?: number | null;
   saving: boolean;
   error: string | null;
+  /** True when the dialog was opened from "Change cover" on a card. */
+  focusCover?: boolean;
   onClose: () => void;
   onSubmit: (draft: BookmarkDraft) => void;
+  /** Covers save on their own, so the change has to travel back immediately. */
+  onCoverChanged: (bookmark: Bookmark) => void;
 }
 
 const EMPTY: BookmarkDraft = {
@@ -44,24 +49,36 @@ export function BookmarkFormDialog({
   defaultCollectionId = null,
   saving,
   error,
+  focusCover = false,
   onClose,
   onSubmit,
+  onCoverChanged,
 }: BookmarkFormDialogProps) {
   const [draft, setDraft] = useState<BookmarkDraft>(EMPTY);
   const [showDetails, setShowDetails] = useState(false);
 
+  /*
+   * Read through a ref so the draft is filled from whichever bookmark is open,
+   * without the effect re-running on every new copy of it. Saving a cover hands
+   * back a fresh object, and that must not wipe text you have not saved yet.
+   */
+  const latest = useRef(bookmark);
+  latest.current = bookmark;
+  const bookmarkId = bookmark?.id ?? null;
+
   useEffect(() => {
     if (!open) return;
+    const current = latest.current;
 
-    if (mode === 'edit' && bookmark) {
+    if (mode === 'edit' && current) {
       setDraft({
-        url: bookmark.url,
-        title: bookmark.title,
-        description: bookmark.description,
-        collectionId: bookmark.collectionId,
+        url: current.url,
+        title: current.title,
+        description: current.description,
+        collectionId: current.collectionId,
         newCollectionName: null,
-        tags: bookmark.tags,
-        isPinned: bookmark.isPinned,
+        tags: current.tags,
+        isPinned: current.isPinned,
       });
       setShowDetails(true);
       return;
@@ -69,7 +86,7 @@ export function BookmarkFormDialog({
 
     setDraft({ ...EMPTY, collectionId: defaultCollectionId });
     setShowDetails(false);
-  }, [open, mode, bookmark, defaultCollectionId]);
+  }, [open, mode, bookmarkId, defaultCollectionId]);
 
   const update = <K extends keyof BookmarkDraft>(key: K, value: BookmarkDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -135,6 +152,10 @@ export function BookmarkFormDialog({
           error={error}
           onChange={(event) => update('url', event.target.value)}
         />
+
+        {mode === 'edit' && bookmark ? (
+          <CoverPicker bookmark={bookmark} onChanged={onCoverChanged} autoFocus={focusCover} />
+        ) : null}
 
         {mode === 'create' ? (
           <button

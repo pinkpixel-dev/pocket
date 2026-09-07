@@ -10,7 +10,10 @@ export interface Bookmark {
   siteName: string;
   domain: string;
   faviconUrl: string | null;
+  /** What a card shows: the custom cover when there is one, else the fetched preview. */
   previewUrl: string | null;
+  /** Set only when this bookmark has a cover of its own. */
+  coverUrl: string | null;
   collectionId: number | null;
   isPinned: boolean;
   tags: string[];

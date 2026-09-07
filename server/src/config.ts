@@ -23,6 +23,8 @@ export const config = {
   dbPath: process.env.POCKET_DB_PATH ?? path.join(dataDir, 'pocket.db'),
   previewsDir: path.join(dataDir, 'previews'),
   faviconsDir: path.join(dataDir, 'favicons'),
+  /** Covers a user uploaded or pasted in, kept apart from fetched previews. */
+  coversDir: path.join(dataDir, 'covers'),
   /** Where the built frontend lives. Absent in dev, where Vite serves it. */
   clientDir: path.resolve(process.env.POCKET_CLIENT_DIR ?? path.join(process.cwd(), '..', 'client', 'dist')),
   fetch: {
@@ -38,6 +40,8 @@ export const config = {
     blockPrivateAddresses: envBool('POCKET_BLOCK_PRIVATE_ADDRESSES', true),
   },
   maxUploadBytes: envInt('POCKET_MAX_UPLOAD_BYTES', 32 * 1024 * 1024),
+  /** One cover image. Smaller than an import, because it is a single picture. */
+  maxCoverBytes: envInt('POCKET_MAX_COVER_BYTES', 10 * 1024 * 1024),
   openai: {
     /** Set this and the browser can no longer change the key. Optional. */
     apiKey: process.env.POCKET_OPENAI_API_KEY?.trim() || '',
@@ -50,7 +54,7 @@ export const config = {
 } as const;
 
 export function ensureDataDirs(): void {
-  for (const dir of [config.dataDir, config.previewsDir, config.faviconsDir]) {
+  for (const dir of [config.dataDir, config.previewsDir, config.faviconsDir, config.coversDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
 }

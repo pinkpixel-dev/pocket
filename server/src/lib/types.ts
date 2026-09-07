@@ -15,6 +15,8 @@ export interface BookmarkRow {
   site_name: string;
   favicon_path: string | null;
   preview_path: string | null;
+  /** A cover the user chose. Wins over `preview_path` when it is set. */
+  cover_path: string | null;
   collection_id: number | null;
   is_pinned: number;
   metadata_status: MetadataStatus;
@@ -35,7 +37,10 @@ export interface Bookmark {
   siteName: string;
   domain: string;
   faviconUrl: string | null;
+  /** What the card should show: the custom cover if there is one. */
   previewUrl: string | null;
+  /** Set only when the user gave this bookmark a cover of its own. */
+  coverUrl: string | null;
   collectionId: number | null;
   isPinned: boolean;
   tags: string[];

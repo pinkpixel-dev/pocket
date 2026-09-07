@@ -24,7 +24,8 @@ export function mapBookmark(row: BookmarkRow): Bookmark {
     siteName: row.site_name,
     domain: domainOf(row.url),
     faviconUrl: mediaUrl(row.favicon_path),
-    previewUrl: mediaUrl(row.preview_path),
+    previewUrl: mediaUrl(row.cover_path ?? row.preview_path),
+    coverUrl: mediaUrl(row.cover_path),
     collectionId: row.collection_id,
     isPinned: row.is_pinned === 1,
     tags: (tagsFor.all(row.id) as Array<{ name: string }>).map((tag) => tag.name),
@@ -245,14 +246,14 @@ export function updateBookmark(id: number, input: UpdateBookmarkInput): Bookmark
 }
 
 /** Content-addressed files are shared, so only delete one nothing else uses. */
-async function releaseImage(relativePath: string | null, ignoreBookmarkId: number): Promise<void> {
+export async function releaseImage(relativePath: string | null, ignoreBookmarkId: number): Promise<void> {
   if (!relativePath) return;
   const { count } = db
     .prepare(
       `SELECT COUNT(*) AS count FROM bookmarks
-        WHERE id != ? AND (preview_path = ? OR favicon_path = ?)`,
+        WHERE id != ? AND (preview_path = ? OR favicon_path = ? OR cover_path = ?)`,
     )
-    .get(ignoreBookmarkId, relativePath, relativePath) as { count: number };
+    .get(ignoreBookmarkId, relativePath, relativePath, relativePath) as { count: number };
   if (count === 0) await removeCachedImage(relativePath);
 }
 
@@ -262,6 +263,7 @@ export async function deleteBookmark(id: number): Promise<void> {
 
   await releaseImage(row.preview_path, id);
   await releaseImage(row.favicon_path, id);
+  await releaseImage(row.cover_path, id);
 
   db.transaction(() => {
     db.prepare('DELETE FROM bookmarks WHERE id = ?').run(id);

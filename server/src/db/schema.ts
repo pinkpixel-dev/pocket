@@ -75,6 +75,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: 3,
+    name: 'custom-covers',
+    up: (db) => {
+      db.exec(`ALTER TABLE bookmarks ADD COLUMN cover_path TEXT;`);
+    },
+  },
 ];
 
 export function migrate(db: Database.Database): void {

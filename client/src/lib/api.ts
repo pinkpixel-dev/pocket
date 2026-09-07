@@ -103,6 +103,22 @@ export const api = {
     return call(`/api/bookmarks/${id}/refresh`, { method: 'POST' });
   },
 
+  /** Uploads a cover. The server sniffs the bytes, so the file type is checked there. */
+  uploadCover(id: number, file: File): Promise<{ bookmark: Bookmark }> {
+    const form = new FormData();
+    form.append('file', file);
+    return call(`/api/bookmarks/${id}/cover`, { method: 'POST', body: form });
+  },
+
+  /** Pocket downloads the image itself, through the same guarded client. */
+  setCoverFromUrl(id: number, imageUrl: string): Promise<{ bookmark: Bookmark }> {
+    return call(`/api/bookmarks/${id}/cover`, { method: 'POST', body: JSON.stringify({ imageUrl }) });
+  },
+
+  removeCover(id: number): Promise<{ bookmark: Bookmark }> {
+    return call(`/api/bookmarks/${id}/cover`, { method: 'DELETE' });
+  },
+
   /** Queues the AI pass. The returned bookmark is already marked pending. */
   fillWithAi(id: number): Promise<{ bookmark: Bookmark }> {
     return call(`/api/bookmarks/${id}/ai`, { method: 'POST' });

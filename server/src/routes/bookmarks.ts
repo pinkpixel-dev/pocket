@@ -1,5 +1,7 @@
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
+import multer from 'multer';
 import { z } from 'zod';
+import { config } from '../config.js';
 import {
   createBookmark,
   deleteBookmark,
@@ -8,6 +10,7 @@ import {
   setPinned,
   updateBookmark,
 } from '../services/bookmarks.js';
+import { removeCover, setCoverFromUpload, setCoverFromUrl } from '../services/covers.js';
 import { enqueueAiFill, enqueueEnrich } from '../services/queue.js';
 import { enrichBookmark } from '../services/enrich.js';
 import { isAiConfigured } from '../services/settings.js';
@@ -15,6 +18,27 @@ import { badRequest } from '../lib/errors.js';
 import type { SortKey } from '../lib/types.js';
 
 export const bookmarksRouter = Router();
+
+const coverMegabytes = Math.round(config.maxCoverBytes / 1024 / 1024);
+
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.maxCoverBytes, files: 1 },
+}).single('file');
+
+/**
+ * Multer's own size error would otherwise surface as the import message, which
+ * names a different limit and would confuse anyone who hit it from a card.
+ */
+function acceptCover(req: Request, res: Response, next: NextFunction): void {
+  coverUpload(req, res, (error: unknown) => {
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      next(badRequest(`That image is larger than the ${coverMegabytes} MB limit.`));
+      return;
+    }
+    next(error);
+  });
+}
 
 const SORT_KEYS: SortKey[] = ['newest', 'oldest', 'title', 'domain', 'updated'];
 
@@ -116,6 +140,26 @@ bookmarksRouter.post('/:id/refresh', async (req, res) => {
   getBookmark(id);
   const { bookmark } = await enrichBookmark(id, { overwriteText: true });
   res.json({ bookmark: bookmark ?? getBookmark(id) });
+});
+
+/**
+ * One route for both ways of choosing a cover. A multipart request carries the
+ * file itself; a JSON body carries a link Pocket downloads on your behalf.
+ */
+bookmarksRouter.post('/:id/cover', acceptCover, async (req, res) => {
+  const id = idParam.parse(req.params.id);
+
+  if (req.file) {
+    res.json({ bookmark: await setCoverFromUpload(id, req.file.buffer) });
+    return;
+  }
+
+  const { imageUrl } = parseBody(z.object({ imageUrl: z.string().min(1) }), req.body ?? {});
+  res.json({ bookmark: await setCoverFromUrl(id, imageUrl) });
+});
+
+bookmarksRouter.delete('/:id/cover', async (req, res) => {
+  res.json({ bookmark: await removeCover(idParam.parse(req.params.id)) });
 });
 
 /**

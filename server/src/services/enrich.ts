@@ -39,9 +39,9 @@ async function releaseIfUnused(relativePath: string | null, keepBookmarkId: numb
   const { count } = db
     .prepare(
       `SELECT COUNT(*) AS count FROM bookmarks
-        WHERE id != ? AND (preview_path = ? OR favicon_path = ?)`,
+        WHERE id != ? AND (preview_path = ? OR favicon_path = ? OR cover_path = ?)`,
     )
-    .get(keepBookmarkId, relativePath, relativePath) as { count: number };
+    .get(keepBookmarkId, relativePath, relativePath, relativePath) as { count: number };
   if (count === 0) await removeCachedImage(relativePath);
 }
 

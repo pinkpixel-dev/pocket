@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ExternalLink,
   FolderInput,
+  ImageUp,
   MoreVertical,
   Pencil,
   Pin,
@@ -18,6 +19,8 @@ import type { Bookmark, CardSize, Collection } from '../lib/types';
 
 export interface BookmarkActions {
   onEdit: (bookmark: Bookmark) => void;
+  /** Opens the same edit dialog, with the cover controls in view. */
+  onChangeCover: (bookmark: Bookmark) => void;
   onMove: (bookmark: Bookmark) => void;
   onTogglePin: (bookmark: Bookmark) => void;
   onRefresh: (bookmark: Bookmark) => void;
@@ -86,6 +89,11 @@ export function buildMenuItems(bookmark: Bookmark, actions: BookmarkActions) {
 
   return [
     { label: 'Edit details', icon: <Pencil size={15} />, onSelect: () => actions.onEdit(bookmark) },
+    {
+      label: bookmark.coverUrl ? 'Change cover' : 'Add a cover',
+      icon: <ImageUp size={15} />,
+      onSelect: () => actions.onChangeCover(bookmark),
+    },
     ...(actions.onFillWithAi
       ? [
           {
@@ -118,7 +126,8 @@ const TRIGGER_CLASS =
 
 export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: CardProps) {
   const title = bookmark.title || displayUrl(bookmark.url, 60);
-  const failed = bookmark.metadataStatus === 'failed';
+  // A cover the user chose answers the complaint, so the flag stops being useful.
+  const failed = bookmark.metadataStatus === 'failed' && !bookmark.coverUrl;
   const style = SIZE_STYLES[size];
   const triggerClass = clsx(TRIGGER_CLASS, style.trigger);
 

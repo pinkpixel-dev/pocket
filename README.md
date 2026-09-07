@@ -15,6 +15,7 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Save a link with one paste. Pocket fetches the page details after saving, so a slow or unreachable site never blocks you.
 - Cards with real page previews, pulled from Open Graph or Twitter card images and cached locally.
 - A designed fallback for links with no preview image, using the favicon, the site's initials, and a colour keyed to the domain.
+- Custom covers. Upload your own image, drop one in, or paste a link to one, for any bookmark whose preview is missing or just ugly.
 - Collections (one per bookmark) and tags (as many as you want).
 - Optional AI filling. Add an OpenAI key and Pocket fills in whatever the page did not give you: title, description, tags, and which collection the link belongs in. Off unless you set a key.
 - Search across titles, URLs, descriptions, site names, and tags.
@@ -47,6 +48,20 @@ Pocket sends the URL, the site name, whatever title and description it already h
 
 When you are filing something by hand, the collection dropdown in the add and edit dialogs has a "+ Create new collection" option, so you do not have to close the dialog to make one first.
 
+## Covers
+
+Some pages have no preview image, and some have one you would rather not look at. Either way you can set your own cover.
+
+Open a bookmark's menu and pick "Add a cover", or edit it and use the Cover section. You have three ways in:
+
+- Upload an image from the device you are on, phone included.
+- Drag an image file onto the cover box, or drag one straight out of another browser tab.
+- Paste a link to an image and press Use. Pocket downloads it through the same address guard as everything else.
+
+A cover replaces the fetched preview everywhere: grid cards, list rows, and the edit dialog. The fetched preview is still there underneath, so removing the cover brings it back, and "Refresh preview" never overwrites a cover you chose.
+
+Covers save as soon as you pick one, separately from the rest of the form. You do not have to press Save changes afterwards.
+
 ## Running it on a NAS
 
 You need Docker with Compose. Grab the repo, then:
@@ -58,7 +73,7 @@ docker compose up -d
 
 Pocket is at `http://<your-nas>:8420`.
 
-The `data` directory holds `pocket.db` and the cached `previews/` and `favicons/` folders. It is bind-mounted into the container, so rebuilding or updating the image does not touch your bookmarks.
+The `data` directory holds `pocket.db` and the cached `previews/`, `favicons/`, and `covers/` folders. It is bind-mounted into the container, so rebuilding or updating the image does not touch your bookmarks.
 
 The container runs as the bundled `node` user (uid 1000). If your NAS share is owned by a different account, uncomment the `user:` line in `compose.yml` and set the ids to match, then make sure `data` is writable by them.
 
@@ -101,6 +116,7 @@ Every setting is an environment variable, and every one has a working default. Y
 | `POCKET_MAX_IMAGE_BYTES` | `6291456` | Largest preview image it will cache |
 | `POCKET_MAX_REDIRECTS` | `5` | Redirect hops allowed per fetch |
 | `POCKET_MAX_UPLOAD_BYTES` | `33554432` | Largest bookmark file you can import |
+| `POCKET_MAX_COVER_BYTES` | `10485760` | Largest cover image you can upload |
 | `POCKET_USER_AGENT` | a Pocket-identifying string | User agent sent when fetching pages |
 | `POCKET_OPENAI_API_KEY` | unset | An OpenAI key. Setting it turns on AI filling and stops the browser from changing the key |
 | `POCKET_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Point this at an OpenAI-compatible endpoint if you run one |

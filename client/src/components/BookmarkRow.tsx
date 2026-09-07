@@ -44,7 +44,7 @@ export function BookmarkRow({ bookmark, collection, busy, ...actions }: RowProps
           <time dateTime={bookmark.createdAt} className="hidden sm:inline">
             {relativeTime(bookmark.createdAt)}
           </time>
-          {bookmark.metadataStatus === 'failed' ? (
+          {bookmark.metadataStatus === 'failed' && !bookmark.coverUrl ? (
             <AlertTriangle size={11} className="text-danger" aria-label="Preview could not be fetched" />
           ) : null}
         </div>

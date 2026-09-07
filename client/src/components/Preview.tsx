@@ -17,11 +17,9 @@ interface PreviewProps {
  */
 export function Preview({ bookmark, className, compact = false }: PreviewProps) {
   const [failed, setFailed] = useState(false);
-  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     setFailed(false);
-    setLoaded(false);
   }, [bookmark.previewUrl]);
 
   const showImage = Boolean(bookmark.previewUrl) && !failed;
@@ -31,20 +29,23 @@ export function Preview({ bookmark, className, compact = false }: PreviewProps) 
   return (
     <div
       className={clsx('relative overflow-hidden bg-raised', className)}
-      style={showImage ? undefined : { backgroundColor: `oklch(0.30 0.035 ${hue})` }}
+      // The tint sits behind the image too, so a slow decode is never a flat box.
+      style={{ backgroundColor: `oklch(0.30 0.035 ${hue})` }}
     >
       {showImage ? (
+        /*
+         * Deliberately not hidden until a load event arrives. Gating visibility
+         * on `onLoad` left cached images sitting in the DOM at zero opacity
+         * after a refresh, which looked like the covers had vanished. The fade
+         * is pure CSS now, so an image that arrives late still shows up.
+         */
         <img
           src={bookmark.previewUrl ?? ''}
           alt=""
           loading="lazy"
           decoding="async"
-          onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={clsx(
-            'h-full w-full object-cover transition-opacity duration-300 ease-(--ease-out-soft)',
-            loaded ? 'opacity-100' : 'opacity-0',
-          )}
+          className="animate-preview-in h-full w-full object-cover"
         />
       ) : (
         <div className="texture-grain absolute inset-0 flex flex-col items-center justify-center gap-2 px-3">

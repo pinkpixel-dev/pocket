@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import { config } from '../config.js';
 import { fetchImage } from '../lib/http.js';
 
-export type ImageKind = 'preview' | 'favicon';
+export type ImageKind = 'preview' | 'favicon' | 'cover';
 
 interface SniffResult {
   extension: string;
@@ -51,13 +51,20 @@ function sniffImage(buffer: Buffer): SniffResult | null {
   return null;
 }
 
-function directoryFor(kind: ImageKind): string {
-  return kind === 'preview' ? config.previewsDir : config.faviconsDir;
-}
+const FOLDERS: Record<ImageKind, string> = {
+  preview: 'previews',
+  favicon: 'favicons',
+  cover: 'covers',
+};
+
+const DIRECTORIES: Record<ImageKind, string> = {
+  preview: config.previewsDir,
+  favicon: config.faviconsDir,
+  cover: config.coversDir,
+};
 
 /** A preview this small is a tracking pixel or a broken placeholder, not art. */
-const MIN_PREVIEW_BYTES = 1024;
-const MIN_FAVICON_BYTES = 48;
+const MIN_BYTES: Record<ImageKind, number> = { preview: 1024, favicon: 48, cover: 1024 };
 
 export interface CachedImage {
   /** Stored as `previews/<name>` so it can be joined to the media route. */
@@ -66,32 +73,39 @@ export interface CachedImage {
   mimeType: string;
 }
 
-export async function cacheImage(sourceUrl: string, kind: ImageKind): Promise<CachedImage | null> {
-  const result = await fetchImage(sourceUrl);
-  if (result.status >= 400 || result.truncated || result.body.length === 0) return null;
+/**
+ * Writes bytes we already hold into the cache. The name is the hash of the
+ * content, so saving the same picture twice costs one file.
+ */
+export async function storeImage(buffer: Buffer, kind: ImageKind): Promise<CachedImage | null> {
+  if (buffer.length < MIN_BYTES[kind]) return null;
 
-  const minimum = kind === 'preview' ? MIN_PREVIEW_BYTES : MIN_FAVICON_BYTES;
-  if (result.body.length < minimum) return null;
-
-  const sniffed = sniffImage(result.body);
+  const sniffed = sniffImage(buffer);
   if (!sniffed) return null;
 
   // An SVG can carry script, so it is only ever served as a download-safe file.
-  const digest = crypto.createHash('sha256').update(result.body).digest('hex').slice(0, 32);
+  const digest = crypto.createHash('sha256').update(buffer).digest('hex').slice(0, 32);
   const fileName = `${digest}${sniffed.extension}`;
-  const target = path.join(directoryFor(kind), fileName);
+  const target = path.join(DIRECTORIES[kind], fileName);
 
   try {
     await fs.access(target);
   } catch {
-    await fs.writeFile(target, result.body);
+    await fs.writeFile(target, buffer);
   }
 
   return {
-    relativePath: `${kind === 'preview' ? 'previews' : 'favicons'}/${fileName}`,
-    bytes: result.body.length,
+    relativePath: `${FOLDERS[kind]}/${fileName}`,
+    bytes: buffer.length,
     mimeType: sniffed.mimeType,
   };
+}
+
+export async function cacheImage(sourceUrl: string, kind: ImageKind): Promise<CachedImage | null> {
+  const result = await fetchImage(sourceUrl);
+  if (result.status >= 400 || result.truncated || result.body.length === 0) return null;
+
+  return storeImage(result.body, kind);
 }
 
 /**
@@ -102,9 +116,9 @@ export async function cacheImage(sourceUrl: string, kind: ImageKind): Promise<Ca
 export async function removeCachedImage(relativePath: string | null | undefined): Promise<void> {
   if (!relativePath) return;
   const [folder, name] = relativePath.split('/');
-  if (!name || (folder !== 'previews' && folder !== 'favicons')) return;
+  const kind = (Object.keys(FOLDERS) as ImageKind[]).find((key) => FOLDERS[key] === folder);
+  if (!name || !kind) return;
   if (name.includes('..') || name.includes('/')) return;
 
-  const target = path.join(folder === 'previews' ? config.previewsDir : config.faviconsDir, name);
-  await fs.rm(target, { force: true });
+  await fs.rm(path.join(DIRECTORIES[kind], name), { force: true });
 }

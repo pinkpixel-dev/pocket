@@ -53,10 +53,17 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
 
-  const [formState, setFormState] = useState<{ open: boolean; mode: FormMode; bookmark: Bookmark | null }>({
+  const [formState, setFormState] = useState<{
+    open: boolean;
+    mode: FormMode;
+    bookmark: Bookmark | null;
+    /** True when the dialog was opened to change the cover specifically. */
+    focusCover: boolean;
+  }>({
     open: false,
     mode: 'create',
     bookmark: null,
+    focusCover: false,
   });
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -86,7 +93,7 @@ export default function App() {
 
   const openCreate = useCallback(() => {
     setFormError(null);
-    setFormState({ open: true, mode: 'create', bookmark: null });
+    setFormState({ open: true, mode: 'create', bookmark: null, focusCover: false });
   }, []);
 
   // "n" opens the save dialog, the one shortcut worth having by default.
@@ -302,10 +309,26 @@ export default function App() {
     }
   };
 
+  /**
+   * A cover saves the moment it is chosen, so the grid and the dialog both
+   * need the new copy. Without the second update the dialog would keep showing
+   * the old thumbnail until it was reopened.
+   */
+  const applyCoverChange = (bookmark: Bookmark) => {
+    library.applyBookmark(bookmark);
+    setFormState((current) =>
+      current.bookmark?.id === bookmark.id ? { ...current, bookmark } : current,
+    );
+  };
+
   const actions = {
     onEdit: (bookmark: Bookmark) => {
       setFormError(null);
-      setFormState({ open: true, mode: 'edit', bookmark });
+      setFormState({ open: true, mode: 'edit', bookmark, focusCover: false });
+    },
+    onChangeCover: (bookmark: Bookmark) => {
+      setFormError(null);
+      setFormState({ open: true, mode: 'edit', bookmark, focusCover: true });
     },
     onMove: setMoveTarget,
     onTogglePin: (bookmark: Bookmark) => void togglePin(bookmark),
@@ -404,8 +427,10 @@ export default function App() {
         defaultCollectionId={library.route.kind === 'collection' ? library.route.id : null}
         saving={saving}
         error={formError}
+        focusCover={formState.focusCover}
         onClose={() => setFormState((current) => ({ ...current, open: false }))}
         onSubmit={(draft) => void submitBookmark(draft)}
+        onCoverChanged={applyCoverChange}
       />
 
       <MoveDialog

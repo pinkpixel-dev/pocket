@@ -2,6 +2,26 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 0.4.0 - September 7, 2026
+
+### 🖼️ Custom covers
+
+- Put your own image on any bookmark. Upload a file, drop one onto the dialog, or paste a link to an image and Pocket downloads it for you
+- Covers live in the edit dialog, and "Add a cover" or "Change cover" in a card's menu opens the dialog with the controls already in view
+- A cover wins over whatever preview was fetched, and removing it brings the fetched preview back. "Refresh preview" leaves your cover alone
+- Covers save the moment you choose one, so you do not have to press Save changes afterwards
+- The "no preview" flag on a card disappears once you have given it a cover, since the complaint no longer applies
+- Uploaded bytes are identified by their magic numbers, the same as fetched images, and a pasted link goes through the same address guard as every other outbound request
+- New `POCKET_MAX_COVER_BYTES` setting, 10 MB by default
+
+### 🐛 Fixes
+
+- Covers no longer vanish after a page refresh. Previews were held at zero opacity until React saw a `load` event, and a cached image can finish before that handler is attached, which left a fully loaded image invisible until you toggled views. The fade is plain CSS now
+
+### 🗄️ Database
+
+- Migration 3 adds a `cover_path` column to `bookmarks`. It is additive and applies on first start
+
 ## 0.3.0 - September 7, 2026
 
 ### ✨ Filling in links with AI
