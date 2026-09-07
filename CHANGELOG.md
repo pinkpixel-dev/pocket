@@ -2,6 +2,21 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.1.1 - September 7, 2026
+
+### 🐛 Fixes
+
+- Working links are no longer marked "broken link". The check used to treat every answer above HTTP 400 as a dead link, so a bot filter, a login wall, a rate limit or a server having a bad afternoon all got the same badge as a page that had genuinely gone. Sites behind Cloudflare, dev.to among them, were the usual casualties
+- Only a 404 or a 410, or a host that cannot be reached at all, counts as broken now. When a host refuses the Pocket user agent, the check asks once more as a browser before deciding anything
+- A timeout no longer condemns a link. Running out of patience says something about the network between your NAS and the site, not about the bookmark
+- Previews no longer spin forever. A fetch that stalled before a socket came up had nothing to stop it, because the timeouts in play only started counting once a connection existed. Three stalled fetches filled every slot in the queue and everything behind them sat there pending
+- One enrichment job now has a single budget covering the page and every preview and favicon it tries, rather than a fresh timeout for each of up to thirteen requests. A slow host could previously hold a queue slot for minutes on its own
+
+### 🔧 Configuration
+
+- `POCKET_ENRICH_TIMEOUT_MS` sets how long one enrichment job may take, defaulting to 45 seconds
+- `POCKET_PROBE_USER_AGENT` sets the browser string the link check retries with
+
 ## 2.1.0 - September 7, 2026
 
 ### 🐛 Fixes

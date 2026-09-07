@@ -36,6 +36,21 @@ export const config = {
     userAgent:
       process.env.POCKET_USER_AGENT ??
       'Mozilla/5.0 (compatible; PocketBookmarks/0.1; +https://github.com/pinkpixel-dev)',
+    /*
+     * A link check is not a crawl, and plenty of hosts sit behind a bot filter
+     * that answers an honest crawler UA with 403. When the polite string gets
+     * turned away, the probe asks once more as a browser before deciding the
+     * bookmark is dead.
+     */
+    probeUserAgent:
+      process.env.POCKET_PROBE_USER_AGENT ??
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    /**
+     * Whole-budget for one enrichment job: the page plus every image and
+     * favicon candidate it tries. Without it a single slow host can hold a
+     * queue slot for minutes, and three of them stall the queue outright.
+     */
+    jobTimeoutMs: envInt('POCKET_ENRICH_TIMEOUT_MS', 45_000),
     /** Turn off only on a network where you trust every reachable host. */
     blockPrivateAddresses: envBool('POCKET_BLOCK_PRIVATE_ADDRESSES', true),
   },

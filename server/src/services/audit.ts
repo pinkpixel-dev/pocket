@@ -134,15 +134,18 @@ async function runAudit(userId: number, state: AuditState, ids: number[] | undef
         const probe = await probeUrl(item.url);
         if (state.cancelRequested) break;
 
-        if (!probe.alive) {
+        if (probe.verdict === 'dead') {
           state.broken += 1;
           const errorMsg = (probe.error ?? 'Link unreachable').slice(0, 400);
           markAuditFailed.run({ id: item.id, userId, error: errorMsg });
-        } else if (item.metadata_status === 'failed') {
+        } else if (probe.verdict === 'alive' && item.metadata_status === 'failed') {
           // Link recovered
           const restoredStatus: MetadataStatus = item.preview_path ? 'ok' : 'partial';
           markAuditRecovered.run({ id: item.id, userId, status: restoredStatus });
         }
+        // An 'unknown' verdict changes nothing on purpose. A timeout or a 5xx
+        // says something about the network or the host's afternoon, not about
+        // whether the bookmark is still worth keeping.
       } catch {
         if (!state.cancelRequested) {
           state.broken += 1;

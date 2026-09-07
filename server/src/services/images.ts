@@ -101,8 +101,12 @@ export async function storeImage(buffer: Buffer, kind: ImageKind): Promise<Cache
   };
 }
 
-export async function cacheImage(sourceUrl: string, kind: ImageKind): Promise<CachedImage | null> {
-  const result = await fetchImage(sourceUrl);
+export async function cacheImage(
+  sourceUrl: string,
+  kind: ImageKind,
+  signal?: AbortSignal,
+): Promise<CachedImage | null> {
+  const result = await fetchImage(sourceUrl, signal);
   if (result.status >= 400 || result.truncated || result.body.length === 0) return null;
 
   return storeImage(result.body, kind);

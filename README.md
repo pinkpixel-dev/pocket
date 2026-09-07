@@ -203,12 +203,14 @@ Every setting is an environment variable, and every one has a working default. Y
 | `POCKET_CLIENT_DIR` | `<repo>/client/dist` | Where the built frontend is served from |
 | `POCKET_BLOCK_PRIVATE_ADDRESSES` | `true` | Blocks metadata fetches to private and reserved addresses |
 | `POCKET_FETCH_TIMEOUT_MS` | `12000` | Whole-request budget for one metadata fetch |
+| `POCKET_ENRICH_TIMEOUT_MS` | `45000` | Budget for one whole enrichment job: the page plus every preview and favicon it tries |
 | `POCKET_MAX_HTML_BYTES` | `2097152` | How much of a page Pocket will read |
 | `POCKET_MAX_IMAGE_BYTES` | `6291456` | Largest preview image it will cache |
 | `POCKET_MAX_REDIRECTS` | `5` | Redirect hops allowed per fetch |
 | `POCKET_MAX_UPLOAD_BYTES` | `33554432` | Largest bookmark file you can import |
 | `POCKET_MAX_COVER_BYTES` | `10485760` | Largest cover image you can upload |
 | `POCKET_USER_AGENT` | a Pocket-identifying string | User agent sent when fetching pages |
+| `POCKET_PROBE_USER_AGENT` | a Chrome string | User agent the link check retries with when a host turns the Pocket one away |
 | `POCKET_OPENAI_API_KEY` | unset | A shared OpenAI key every account can use. An account that saves its own key uses that instead |
 | `POCKET_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Point this at an OpenAI-compatible endpoint if you run one |
 | `POCKET_OPENAI_TIMEOUT_MS` | `60000` | How long to wait for a model to answer |

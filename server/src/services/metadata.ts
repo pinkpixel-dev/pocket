@@ -124,10 +124,10 @@ export class MetadataError extends Error {
   }
 }
 
-export async function fetchMetadata(url: string): Promise<PageMetadata> {
+export async function fetchMetadata(url: string, signal?: AbortSignal): Promise<PageMetadata> {
   let result;
   try {
-    result = await fetchHtml(url);
+    result = await fetchHtml(url, signal);
   } catch (error) {
     if (error instanceof FetchError) throw new MetadataError(error.message);
     throw error;

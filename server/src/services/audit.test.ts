@@ -108,7 +108,7 @@ test('importLinks filters by year correctly', async () => {
 test('probeUrl handles unreachable URLs gracefully', async () => {
   // Domain that does not exist
   const result = await probeUrl('https://this-domain-surely-does-not-exist-123456789.org', 3000);
-  assert.equal(result.alive, false);
+  assert.equal(result.verdict, 'dead');
   assert.ok(result.error !== null);
 });
 

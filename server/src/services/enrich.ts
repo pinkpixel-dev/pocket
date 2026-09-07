@@ -1,3 +1,4 @@
+import { config } from '../config.js';
 import { db } from '../db/index.js';
 import type { Bookmark, MetadataStatus } from '../lib/types.js';
 import { getBookmark, getBookmarkRow } from './bookmarks.js';
@@ -21,10 +22,14 @@ export interface EnrichResult {
 async function firstUsableImage(
   candidates: string[],
   kind: 'preview' | 'favicon',
+  signal: AbortSignal,
 ): Promise<string | null> {
   for (const candidate of candidates) {
+    // The job's budget is already spent, so the remaining candidates would
+    // only fail one by one and hold the queue slot while they did it.
+    if (signal.aborted) return null;
     try {
-      const cached = await cacheImage(candidate, kind);
+      const cached = await cacheImage(candidate, kind, signal);
       if (cached) return cached.relativePath;
     } catch {
       // A single bad candidate should not stop the others from being tried.
@@ -62,9 +67,17 @@ export async function enrichBookmark(
   const row = getBookmarkRow(userId, id);
   if (!row) return { bookmark: null, excerpt: '' };
 
+  /*
+   * One budget for the whole job, not per request. A page with six image
+   * candidates and six favicon candidates used to be thirteen fetches deep,
+   * each with its own timeout, so a single slow host could sit on one of the
+   * three queue slots for minutes and everything behind it stayed pending.
+   */
+  const signal = AbortSignal.timeout(config.fetch.jobTimeoutMs);
+
   let metadata;
   try {
-    metadata = await fetchMetadata(row.url);
+    metadata = await fetchMetadata(row.url, signal);
   } catch (error) {
     const message =
       error instanceof MetadataError || error instanceof Error
@@ -74,8 +87,8 @@ export async function enrichBookmark(
     return { bookmark: getBookmark(userId, id), excerpt: '' };
   }
 
-  const previewPath = await firstUsableImage(metadata.imageCandidates, 'preview');
-  const faviconPath = await firstUsableImage(metadata.faviconCandidates, 'favicon');
+  const previewPath = await firstUsableImage(metadata.imageCandidates, 'preview', signal);
+  const faviconPath = await firstUsableImage(metadata.faviconCandidates, 'favicon', signal);
 
   const stillThere = getBookmarkRow(userId, id);
   if (!stillThere) return { bookmark: null, excerpt: metadata.excerpt };
