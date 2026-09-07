@@ -25,12 +25,12 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Pinned bookmarks, which float to the top of every view.
 - Grid view for browsing and list view for scanning or tidying up.
 - A resizable sidebar. Drag its right edge when a collection name needs more room, or use the arrow keys once it has focus. Your width is remembered.
-- Selection mode for clearing out links in bulk. Turn it on from the toolbar, tap the cards or rows you want, or select everything in the current view, then delete the lot in one step. This is the fast way to empty "Needs attention" after an import drags in a few hundred dead links.
+- Selection mode for bulk library tasks. Turn it on from the toolbar to pick cards or rows across your library. You can delete links in bulk, move them to an existing or new collection, unfile them to "No collection", or run AI sorting on just the selected links.
 - Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
 - Mobile PWA support. Add Pocket to your phone home screen for a standalone app experience.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
 - An optional link check after an import. Everything in the file is saved first, then Pocket reads the links in the background and marks the ones that are gone, so they show up in "Needs attention" instead of disappearing on you. A file of ten thousand links still imports in seconds.
-- Bulk sorting for everything sitting in "No collection". The AI plans a short list of collections first, then files your unsorted links into it, and you review the result before anything is applied.
+- Bulk sorting for everything sitting in "No collection". The AI plans a short list of collections first, then files your entire backlog in chunks of 40 with live progress, and you review the result before anything is applied.
 - A tidy-up pass for a collection list that has gotten out of hand. It proposes merges, keeps the old names as tags, and you pick which ones to accept.
 - The same tidy-up for tags, which fold together by synonym and plural rather than by subject. Plus bulk select, merge and delete for tags you would rather sort out yourself.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
@@ -79,7 +79,7 @@ When you are filing something by hand, every place that asks you to pick a colle
 
 A bookmark library goes wrong in a predictable way: you end up with 90 collections, most of them holding a single link, and a pile of stuff in "No collection" that never got filed at all. Pocket has two tools for that, both in Settings under Collections and tags, and both need an OpenAI key.
 
-**Sorting what is unfiled.** Open the AI sorting dialog from the uncollected triage section. It works in two passes. First it reads everything sitting in "No collection" and proposes a short list of collections, roughly one per twelve links. You get that list as chips and can drop any you do not want. Then it files every unsorted bookmark into that list and nothing else. It cannot invent a new name halfway through, which is the whole point. Anything that fits none of the collections stays unfiled with its tags, which is a better outcome than a shelf built for one link.
+**Sorting what is unfiled.** Open the AI sorting dialog from the uncollected triage section in Settings, or select bookmarks on the main page and click "Sort with AI". It works in two passes. First it reads a sample of your unfiled links and proposes a short list of collections, roughly one per twelve links. You get that list as chips and can drop any you do not want. Then it files your bookmarks into that list in chunks of 40. It cannot invent a new name halfway through, which is the whole point. Anything that fits none of the collections stays unfiled with its tags, which is a better outcome than a shelf built for one link.
 
 **Tidying tags.** The tag list drifts the same way, just differently: not sub-topics but synonyms, plurals and slightly different phrasings of one idea. "llm", "llms" and "large language models" all end up sitting there. Press "Tidy up with AI" above the tag list and it folds those into whichever one you already use most. Tags that group nothing get flagged for removal, though those start unticked, since deleting a tag loses the label rather than moving it. You can also tick tags yourself and merge or delete them in bulk without the AI.
 
