@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import {
-  Bookmark as BookmarkIcon,
   FolderOpen,
   Hash,
   Inbox,
@@ -164,9 +163,7 @@ export function Sidebar({
       >
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
           <a href="#/" onClick={onClose} className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-accent-ink">
-              <BookmarkIcon size={17} strokeWidth={2.5} aria-hidden />
-            </span>
+            <img src="/logo.png" alt="" aria-hidden="true" className="h-8 w-8 shrink-0 object-contain" />
             <span className="font-display text-lg font-semibold tracking-tight text-ink">Pocket</span>
           </a>
           <button

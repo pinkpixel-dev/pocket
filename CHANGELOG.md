@@ -2,6 +2,19 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 0.5.0 - September 7, 2026
+
+### 🎨 Branding
+
+- Replace the generic bookmark icon in the top-left sidebar header with the Pocket logo
+- Use dedicated `favicon.png` for browser tabs and bookmarks
+
+### 📱 PWA
+
+- Configure `icon.png` as the dedicated app icon for home screens and app switchers
+- Add web app manifest with standalone display mode and dark theme tokens matching the interface
+- Add mobile web app meta tags for iOS home screen launch
+
 ## 0.4.0 - September 7, 2026
 
 ### 🖼️ Custom covers
