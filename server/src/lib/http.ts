@@ -37,6 +37,16 @@ interface FetchOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Destroying a body we did not finish reading makes undici emit an `error`
+ * event on the stream. With no listener attached that becomes an uncaught
+ * exception and takes the process down, so the listener goes on first.
+ */
+function discardBody(body: { on(event: 'error', listener: () => void): unknown; destroy(): unknown }): void {
+  body.on('error', () => {});
+  body.destroy();
+}
+
 function assertFetchable(url: URL): void {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new FetchError(`Refusing to fetch a ${url.protocol} URL.`);
@@ -84,7 +94,7 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
     const status = response.statusCode;
     const location = response.headers['location'];
     if (status >= 300 && status < 400 && typeof location === 'string' && location) {
-      response.body.destroy();
+      discardBody(response.body);
       let next: URL;
       try {
         next = new URL(location, current);
@@ -100,7 +110,7 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
 
     const declared = Number(response.headers['content-length']);
     if (Number.isFinite(declared) && declared > options.maxBytes) {
-      response.body.destroy();
+      discardBody(response.body);
       throw new FetchError(`${current.hostname} returned ${declared} bytes, over the ${options.maxBytes} byte limit.`);
     }
 
@@ -119,7 +129,7 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
         chunks.push(buffer);
       }
     } finally {
-      response.body.destroy();
+      discardBody(response.body);
     }
 
     return {
