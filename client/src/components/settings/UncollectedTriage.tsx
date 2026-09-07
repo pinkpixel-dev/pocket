@@ -14,6 +14,7 @@ interface UncollectedTriageProps {
   aiConfigured: boolean;
   onChanged: () => void;
   onAiCategorize: (bookmarkIds?: number[], domain?: string) => void;
+  refreshTrigger?: number;
 }
 
 export function UncollectedTriage({
@@ -21,9 +22,11 @@ export function UncollectedTriage({
   aiConfigured,
   onChanged,
   onAiCategorize,
+  refreshTrigger,
 }: UncollectedTriageProps) {
   const toast = useToast();
   const [domains, setDomains] = useState<UncollectedDomainGroup[]>([]);
+  const [totalUncollected, setTotalUncollected] = useState(0);
   const [loading, setLoading] = useState(false);
   const [assigningGroup, setAssigningGroup] = useState<UncollectedDomainGroup | null>(null);
   const [targetCollectionId, setTargetCollectionId] = useState<number | 'new' | null>(null);
@@ -33,8 +36,9 @@ export function UncollectedTriage({
   const loadDomains = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.getUncollectedDomains(20);
+      const res = await api.getUncollectedDomains(25);
       setDomains(res.domains);
+      setTotalUncollected(res.totalUncollected ?? res.domains.reduce((acc, d) => acc + d.count, 0));
     } catch {
       // Ignored if unavailable
     } finally {
@@ -44,9 +48,7 @@ export function UncollectedTriage({
 
   useEffect(() => {
     void loadDomains();
-  }, [loadDomains]);
-
-  const totalUncollectedCount = domains.reduce((acc, d) => acc + d.count, 0);
+  }, [loadDomains, refreshTrigger]);
 
   const handleBatchAssign = async () => {
     if (!assigningGroup || targetCollectionId === null) return;
@@ -98,7 +100,9 @@ export function UncollectedTriage({
         <div>
           <h3 className="text-[0.9375rem] font-semibold text-ink">Uncollected bookmarks triage</h3>
           <p className="text-[0.875rem] text-ink-muted">
-            Grouped by domain ({pluralize(totalUncollectedCount, 'bookmark')}) to help file batches into collections quickly.
+            {totalUncollected > 0
+              ? `${pluralize(totalUncollected, 'uncollected bookmark')} in your library. Grouped by top domains to file quickly.`
+              : 'Grouped by domain to help file batches into collections quickly.'}
           </p>
         </div>
         {aiConfigured ? (
@@ -106,10 +110,10 @@ export function UncollectedTriage({
             variant="secondary"
             onClick={() => onAiCategorize()}
             className="self-start sm:self-auto"
-            title="Plan a short list of collections, then file everything into it"
+            title="Plan collections and sort all uncollected bookmarks"
           >
             <Sparkles size={15} className="text-accent" aria-hidden />
-            Sort with AI
+            Sort all with AI
           </Button>
         ) : null}
       </div>

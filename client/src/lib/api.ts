@@ -16,7 +16,7 @@ import type {
   SortKey,
   Stats,
   Tag,
-  UncollectedDomainGroup,
+  UncollectedDomainsResponse,
 } from './types';
 
 export class ApiError extends Error {
@@ -372,7 +372,7 @@ export const api = {
     });
   },
 
-  getUncollectedDomains(limit?: number): Promise<{ domains: UncollectedDomainGroup[] }> {
+  getUncollectedDomains(limit?: number): Promise<UncollectedDomainsResponse> {
     const q = limit ? `?limit=${limit}` : '';
     return call(`/api/library/uncollected-domains${q}`);
   },

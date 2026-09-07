@@ -144,6 +144,11 @@ export interface UncollectedDomainGroup {
   bookmarkIds: number[];
 }
 
+export interface UncollectedDomainsResponse {
+  domains: UncollectedDomainGroup[];
+  totalUncollected: number;
+}
+
 export interface CategorySuggestion {
   bookmarkId: number;
   url: string;

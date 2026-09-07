@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   batchAssignBookmarksToCollection,
   convertCollectionsToTags,
+  countUncollectedBookmarks,
   createCollection,
   deleteCollection,
   getUncollectedDomainStats,
@@ -94,7 +95,11 @@ libraryRouter.post('/collections/convert-to-tags', (req, res) => {
 libraryRouter.get('/library/uncollected-domains', (req, res) => {
   const limitParsed = req.query.limit ? parseInt(String(req.query.limit), 10) : 25;
   const limit = Math.min(Math.max(Number.isFinite(limitParsed) ? limitParsed : 25, 1), 100);
-  res.json({ domains: getUncollectedDomainStats(userIdOf(req), limit) });
+  const userId = userIdOf(req);
+  res.json({
+    domains: getUncollectedDomainStats(userId, limit),
+    totalUncollected: countUncollectedBookmarks(userId),
+  });
 });
 
 libraryRouter.post('/library/batch-assign-collection', (req, res) => {

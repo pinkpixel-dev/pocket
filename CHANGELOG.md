@@ -2,6 +2,19 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.2.1 - September 7, 2026
+
+### 🐛 Fixes
+
+- AI collection planning now files all uncollected bookmarks in chunks instead of capping at 250 links. Libraries with hundreds or thousands of unfiled links now process through their entire backlog in a single sorting pass
+- Uncollected bookmarks triage counts accurately reflect the total uncollected bookmarks across the library instead of summing only the top 20 domains
+- Uncollected bookmarks triage now refreshes immediately when bookmarks are filed, collections are deleted, or categories are applied, removing filed domains from the list without requiring a page reload
+- Domain bookmark IDs are now gathered reliably without truncation risk on domains with large bookmark counts
+
+### 🎨 Settings
+
+- Clarified the collections table order dropdown label to "Order by:" and added visual separation from the "Tidy up with AI" button to avoid confusing table ordering with AI sorting
+
 ## 2.2.0 - September 7, 2026
 
 ### 📁 Collections

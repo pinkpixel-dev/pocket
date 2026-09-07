@@ -20,6 +20,7 @@ const {
   convertCollectionsToTags,
   batchAssignBookmarksToCollection,
   getUncollectedDomainStats,
+  countUncollectedBookmarks,
 } = await import('./collections.js');
 const { createBookmark, getBookmark } = await import('./bookmarks.js');
 const { listTags, mergeTags, deleteTags } = await import('./tags.js');
@@ -208,6 +209,9 @@ test('batchAssignBookmarksToCollection and getUncollectedDomainStats', () => {
     metadataStatus: 'manual',
   });
 
+  const initialUncollected = countUncollectedBookmarks(OWNER);
+  assert.ok(initialUncollected >= 2);
+
   const domains = getUncollectedDomainStats(OWNER, 10);
   const githubGroup = domains.find((d) => d.domain === 'github.com');
   assert.ok(githubGroup);
@@ -218,6 +222,7 @@ test('batchAssignBookmarksToCollection and getUncollectedDomainStats', () => {
   const targetCol = createCollection(OWNER, { name: 'Code Repos' });
   const count = batchAssignBookmarksToCollection(OWNER, [bm1.bookmark.id, bm2.bookmark.id], targetCol.id);
   assert.equal(count, 2);
+  assert.equal(countUncollectedBookmarks(OWNER), initialUncollected - 2);
 
   const updatedBm1 = getBookmark(OWNER, bm1.bookmark.id)!;
   assert.equal(updatedBm1.collectionId, targetCol.id);

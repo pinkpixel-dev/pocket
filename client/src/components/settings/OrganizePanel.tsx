@@ -49,6 +49,12 @@ export function OrganizePanel({
     domain?: string;
   } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [triageRefreshToken, setTriageRefreshToken] = useState(0);
+
+  const handleChanged = () => {
+    onChanged();
+    setTriageRefreshToken((v) => v + 1);
+  };
 
   const sortedCollections = useMemo(() => {
     const list = [...collections];
@@ -100,7 +106,7 @@ export function OrganizePanel({
     try {
       await api.deleteCollection(pendingDelete.id);
       toast.success("Collection deleted. Its bookmarks were kept.");
-      onChanged();
+      handleChanged();
     } catch (error) {
       toast.error(
         error instanceof ApiError
@@ -124,7 +130,7 @@ export function OrganizePanel({
         `Converted ${pluralize(res.converted, "collection")} to tags (${pluralize(res.bookmarksTagged, "bookmark")} tagged).`,
       );
       setSelectedIds(new Set());
-      onChanged();
+      handleChanged();
     } catch (err) {
       toast.error(
         err instanceof ApiError
@@ -148,7 +154,7 @@ export function OrganizePanel({
         `Deleted ${pluralize(pendingBulkDelete.length, "collection")}. Bookmarks were kept.`,
       );
       setSelectedIds(new Set());
-      onChanged();
+      handleChanged();
     } catch (err) {
       toast.error(
         err instanceof ApiError ? err.message : "Could not delete collections.",
@@ -189,7 +195,7 @@ export function OrganizePanel({
               ) : null}
               <div className="flex items-center gap-2">
                 <label htmlFor="collection-sort" className="text-ink-muted">
-                  Sort:
+                  Order by:
                 </label>
                 <select
                   id="collection-sort"
@@ -198,7 +204,7 @@ export function OrganizePanel({
                     setSortOrder(e.target.value as CollectionSortKey)
                   }
                   className="rounded-lg border border-line bg-surface px-2.5 py-1.5 text-[0.8125rem] text-ink focus:border-accent focus:outline-none"
-                  aria-label="Sort collections"
+                  aria-label="Order collections table"
                 >
                   <option value="count-desc">Most bookmarks</option>
                   <option value="count-asc">Fewest bookmarks</option>
@@ -333,7 +339,8 @@ export function OrganizePanel({
       <UncollectedTriage
         collections={collections}
         aiConfigured={aiConfigured}
-        onChanged={onChanged}
+        refreshTrigger={triageRefreshToken}
+        onChanged={handleChanged}
         onAiCategorize={(bookmarkIds, domain) => {
           setAiTarget({ bookmarkIds, domain });
           setAiDialogOpen(true);
@@ -349,7 +356,7 @@ export function OrganizePanel({
       <CollectionCleanupDialog
         open={cleanupOpen}
         onClose={() => setCleanupOpen(false)}
-        onApplied={onChanged}
+        onApplied={handleChanged}
       />
 
       <MergeCollectionsDialog
@@ -359,7 +366,7 @@ export function OrganizePanel({
         onClose={() => setMergeDialogOpen(false)}
         onMerged={() => {
           setSelectedIds(new Set());
-          onChanged();
+          handleChanged();
         }}
       />
 
@@ -372,7 +379,7 @@ export function OrganizePanel({
           setAiTarget(null);
         }}
         onApplied={() => {
-          onChanged();
+          handleChanged();
         }}
       />
 

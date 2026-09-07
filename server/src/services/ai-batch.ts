@@ -260,7 +260,11 @@ export async function planCollections(
 
   const filingIds = isSpecific && options.bookmarkIds
     ? options.bookmarkIds
-    : candidates.map((row) => row.id);
+    : (db
+        .prepare(
+          'SELECT id FROM bookmarks WHERE user_id = ? AND collection_id IS NULL ORDER BY id DESC',
+        )
+        .all(userId) as Array<{ id: number }>).map((row) => row.id);
 
   return {
     collections,

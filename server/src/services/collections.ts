@@ -225,21 +225,37 @@ export interface UncollectedDomainGroup {
   bookmarkIds: number[];
 }
 
+export function countUncollectedBookmarks(userId: number): number {
+  return (
+    db
+      .prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ? AND collection_id IS NULL')
+      .get(userId) as { count: number }
+  ).count;
+}
+
 export function getUncollectedDomainStats(userId: number, limit = 25): UncollectedDomainGroup[] {
-  const rows = db
+  const domainRows = db
     .prepare(
-      `SELECT site_name AS domain, COUNT(*) AS count, GROUP_CONCAT(id) AS ids
+      `SELECT site_name AS domain, COUNT(*) AS count
          FROM bookmarks
         WHERE user_id = ? AND collection_id IS NULL AND site_name != ''
         GROUP BY site_name
         ORDER BY count DESC
         LIMIT ?`,
     )
-    .all(userId, limit) as Array<{ domain: string; count: number; ids: string }>;
+    .all(userId, limit) as Array<{ domain: string; count: number }>;
 
-  return rows.map((row) => ({
+  if (domainRows.length === 0) return [];
+
+  const getIdsStmt = db.prepare(
+    `SELECT id FROM bookmarks
+      WHERE user_id = ? AND collection_id IS NULL AND site_name = ?
+      ORDER BY id DESC`,
+  );
+
+  return domainRows.map((row) => ({
     domain: row.domain,
     count: row.count,
-    bookmarkIds: row.ids ? row.ids.split(',').map((s) => parseInt(s, 10)).filter(Number.isFinite) : [],
+    bookmarkIds: (getIdsStmt.all(userId, row.domain) as Array<{ id: number }>).map((r) => r.id),
   }));
 }
