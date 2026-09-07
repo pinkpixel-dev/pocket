@@ -2,6 +2,26 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.0.0 - September 7, 2026
+
+### 🚀 Release
+
+- First stable release of Pocket: a private, self-hosted bookmark library designed for home servers and personal NAS storage
+- Single container deployment with zero external database dependencies, storing library data and cached media locally
+
+### 🎨 Appearance
+
+- Reorder accent color palette in Settings Appearance: Gold (default), Blue, Red, Green, Cyan, Purple, Pink, and Teal
+
+### 🐳 Docker
+
+- Official multi-architecture image (`linux/amd64` and `linux/arm64`) published on Docker Hub as `pinkpixeldev/pocket:1.0.0` and `pinkpixeldev/pocket:latest`
+- Add Docker publishing guide and Docker Hub overview documentation in `/DOCS`
+
+### 📖 Documentation
+
+- Expand README with Docker Hub pull commands, standalone mobile installation instructions, and accent color customization
+
 ## 0.6.0 - September 7, 2026
 
 ### 🎨 Appearance

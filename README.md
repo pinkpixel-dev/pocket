@@ -16,12 +16,14 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Cards with real page previews, pulled from Open Graph or Twitter card images and cached locally.
 - A designed fallback for links with no preview image, using the favicon, the site's initials, and a colour keyed to the domain.
 - Custom covers. Upload your own image, drop one in, or paste a link to one, for any bookmark whose preview is missing or just ugly.
+- Eight accent colors in Settings (Gold, Blue, Red, Green, Cyan, Purple, Pink, Teal), with automatic logo color matching.
 - Collections (one per bookmark) and tags (as many as you want).
 - Optional AI filling. Add an OpenAI key and Pocket fills in whatever the page did not give you: title, description, tags, and which collection the link belongs in. Off unless you set a key.
 - Search across titles, URLs, descriptions, site names, and tags.
 - Pinned bookmarks, which float to the top of every view.
 - Grid view for browsing and list view for scanning or tidying up.
 - Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
+- Mobile PWA support. Add Pocket to your phone home screen for a standalone app experience.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
 
@@ -62,35 +64,85 @@ A cover replaces the fetched preview everywhere: grid cards, list rows, and the 
 
 Covers save as soon as you pick one, separately from the rest of the form. You do not have to press Save changes afterwards.
 
-## Running it on a NAS
+## Appearance and accent colors
 
-You need Docker with Compose. Grab the repo, then:
+Pocket uses a dark theme built for low glare. In Settings > Appearance, you can choose from eight accent colors:
+
+- Gold (default)
+- Blue
+- Red
+- Green
+- Cyan
+- Purple
+- Pink
+- Teal
+
+The Pocket logo in the header tints dynamically to match the accent you pick. Your choice is stored locally in the browser and applied before mount, so you never get a flash of the default color on page refresh.
+
+## Running it with Docker
+
+The easiest way to run Pocket is with the published Docker image.
+
+### Using Docker Run
 
 ```bash
 mkdir -p data
+docker run -d \
+  --name pocket \
+  --restart unless-stopped \
+  -p 8420:8420 \
+  -v ./data:/data \
+  pinkpixeldev/pocket:latest
+```
+
+Open `http://localhost:8420` (or your server's IP address).
+
+### Using Docker Compose
+
+Create a `compose.yml` file:
+
+```yaml
+services:
+  pocket:
+    image: pinkpixeldev/pocket:latest
+    container_name: pocket
+    restart: unless-stopped
+    ports:
+      - '8420:8420'
+    volumes:
+      - ./data:/data
+    environment:
+      - TZ=UTC
+      # Optional: set your OpenAI key here instead of in Settings
+      # - POCKET_OPENAI_API_KEY=your-key-here
+```
+
+Start the container:
+
+```bash
 docker compose up -d
 ```
 
-Pocket is at `http://<your-nas>:8420`.
+The `data` directory holds `pocket.db` and the cached `previews/`, `favicons/`, and `covers/` folders. It is bind-mounted into the container, so updating the image does not touch your bookmarks.
 
-The `data` directory holds `pocket.db` and the cached `previews/`, `favicons/`, and `covers/` folders. It is bind-mounted into the container, so rebuilding or updating the image does not touch your bookmarks.
+The container runs as user `node` (uid 1000). If your NAS storage is owned by a different account, set `user: 'uid:gid'` in your compose file to match, and make sure the `data` directory is writable by that account.
 
-The container runs as the bundled `node` user (uid 1000). If your NAS share is owned by a different account, uncomment the `user:` line in `compose.yml` and set the ids to match, then make sure `data` is writable by them.
-
-Full deployment notes, including backup, restore, and updating, are in [DOCS/DEPLOYMENT.md](DOCS/DEPLOYMENT.md).
+Full deployment instructions, including backup, restore, reverse proxies, and troubleshooting, are in [DOCS/DEPLOYMENT.md](DOCS/DEPLOYMENT.md).
 
 ## Running it locally
 
-Node 22 or newer.
+If you want to run or develop Pocket directly from source, you need Node 22 or newer.
 
 ```bash
+git clone https://github.com/pinkpixel-dev/pocket.git
+cd pocket
 npm install
 npm run dev
 ```
 
 That starts the API on port 8420 and the Vite dev server on port 5273, which proxies `/api` and `/media` through to the API. Open `http://localhost:5273`.
 
-To run the production build the way the container does:
+To build and run the production server locally:
 
 ```bash
 npm run build
@@ -155,10 +207,9 @@ client/src/
 
 ## Project status
 
-I have run it against real sites, imported and re-imported browser exports, and verified the Docker image end to end on x86. What has not been tested yet:
+I have run it against real sites, imported and re-imported browser exports, and verified the Docker image end to end on x86 and arm64. What has not been tested yet:
 
-- A real NAS deployment. I built and ran the container locally, not on Synology or Unraid.
-- arm64. better-sqlite3 ships arm64 prebuilds and the Dockerfile does not compile anything, so it should work, but I have not run it.
+- A real NAS deployment on commercial hardware. I built and ran the container locally, not on Synology or Unraid directly.
 - Large libraries. Search uses `LIKE` rather than a full-text index, which is fine for a few thousand bookmarks and will get slow well before a hundred thousand.
 
 Not everything on the roadmap is built. Screenshot generation, a browser extension, and bulk editing are all listed in [DOCS/ROADMAP.md](DOCS/ROADMAP.md) and none of them exist yet.
