@@ -11,6 +11,7 @@
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
     "serve": "docusaurus serve",
+    "deploy:pages": "wrangler pages deploy",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
