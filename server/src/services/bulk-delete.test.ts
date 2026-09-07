@@ -10,9 +10,15 @@ process.env.POCKET_DATA_DIR = tmpDir;
 process.env.POCKET_BLOCK_PRIVATE_ADDRESSES = '0';
 
 const { db } = await import('../db/index.js');
-const { createBookmark, deleteBookmarks, listBookmarks, countBookmarks } = await import(
-  './bookmarks.js'
-);
+const {
+  createBookmark,
+  deleteBookmarks,
+  dismissBroken,
+  dismissBrokenBulk,
+  getBookmark,
+  listBookmarks,
+  countBookmarks,
+} = await import('./bookmarks.js');
 const { listTags } = await import('./tags.js');
 
 
@@ -66,3 +72,23 @@ test('deleteBookmarks on an empty list changes nothing', async () => {
   assert.equal(await deleteBookmarks(OWNER, []), 0);
   assert.equal(countBookmarks(OWNER), before);
 });
+
+test('dismissBroken clears error and restores failed status', async () => {
+  const id = save('https://broken-test.example');
+  const dismissed = dismissBroken(OWNER, id);
+  assert.equal(dismissed.metadataStatus, 'manual');
+  assert.equal(getBookmark(OWNER, id).metadataError, null);
+});
+
+test('dismissBrokenBulk clears multiple failed bookmarks in bulk', async () => {
+  const id1 = save('https://bulk-broken-1.example');
+  const id2 = save('https://bulk-broken-2.example');
+
+  const count = dismissBrokenBulk(OWNER, [id1, id2]);
+  assert.equal(count, 2);
+  assert.equal(getBookmark(OWNER, id1).metadataStatus, 'manual');
+  assert.equal(getBookmark(OWNER, id2).metadataStatus, 'manual');
+  assert.equal(getBookmark(OWNER, id1).metadataError, null);
+  assert.equal(getBookmark(OWNER, id2).metadataError, null);
+});
+

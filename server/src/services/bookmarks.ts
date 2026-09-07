@@ -1,6 +1,7 @@
 import { db } from '../db/index.js';
 import type { Bookmark, BookmarkQuery, BookmarkRow, MetadataStatus, SortKey } from '../lib/types.js';
 import { domainOf, normalizeUrl, parseUrl } from '../lib/url.js';
+import { probeUrl } from '../lib/http.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { removeCachedImage } from './images.js';
 import { parseTagInput, pruneOrphanTags, setBookmarkTags } from './tags.js';
@@ -349,3 +350,84 @@ export function countBookmarks(userId: number): number {
     }
   ).count;
 }
+
+/**
+ * Dismisses a broken link warning by restoring metadata_status to 'ok'
+ * (if a preview exists) or 'manual', and clearing metadata_error.
+ */
+export function dismissBroken(userId: number, id: number): Bookmark {
+  const row = getBookmarkRow(userId, id);
+  if (!row) throw notFound('That bookmark no longer exists.');
+
+  const restoredStatus: MetadataStatus = row.preview_path ? 'ok' : 'manual';
+  const result = db
+    .prepare(
+      `UPDATE bookmarks
+          SET metadata_status = ?,
+              metadata_error = NULL,
+              updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?`,
+    )
+    .run(restoredStatus, id, userId);
+
+  if (result.changes === 0) throw notFound('That bookmark no longer exists.');
+  return getBookmark(userId, id);
+}
+
+/**
+ * Dismisses broken link warnings in bulk, clearing metadata_error and restoring
+ * status to 'ok' or 'manual' in a single transaction.
+ */
+export function dismissBrokenBulk(userId: number, ids: number[]): number {
+  if (ids.length === 0) return 0;
+
+  return db.transaction(() => {
+    const stmt = db.prepare(
+      `UPDATE bookmarks
+          SET metadata_status = CASE WHEN preview_path IS NOT NULL THEN 'ok' ELSE 'manual' END,
+              metadata_error = NULL,
+              updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?`,
+    );
+    let count = 0;
+    for (const id of ids) {
+      count += stmt.run(id, userId).changes;
+    }
+    return count;
+  })();
+}
+
+/**
+ * Checks a single bookmark's link health using probeUrl, updating its status
+ * if it has recovered or is confirmed dead, and returning the fresh bookmark.
+ */
+export async function probeSingleBookmark(userId: number, id: number): Promise<Bookmark> {
+  const row = getBookmarkRow(userId, id);
+  if (!row) throw notFound('That bookmark no longer exists.');
+
+  const probe = await probeUrl(row.url);
+  if (probe.verdict === 'dead') {
+    const errorMsg = (probe.error ?? 'Link unreachable').slice(0, 400);
+    db.prepare(
+      `UPDATE bookmarks
+          SET metadata_status = 'failed',
+              metadata_error = ?,
+              metadata_fetched_at = datetime('now'),
+              updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?`,
+    ).run(errorMsg, id, userId);
+  } else if (probe.verdict === 'alive' && row.metadata_status === 'failed') {
+    const restoredStatus: MetadataStatus = row.preview_path ? 'ok' : 'manual';
+    db.prepare(
+      `UPDATE bookmarks
+          SET metadata_status = ?,
+              metadata_error = NULL,
+              metadata_fetched_at = datetime('now'),
+              updated_at = datetime('now')
+        WHERE id = ? AND user_id = ?`,
+    ).run(restoredStatus, id, userId);
+  }
+
+  return getBookmark(userId, id);
+}
+

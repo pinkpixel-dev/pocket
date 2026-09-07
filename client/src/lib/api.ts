@@ -210,6 +210,24 @@ export const api = {
     return call(`/api/bookmarks/${id}/refresh`, { method: 'POST' });
   },
 
+  /** Dismisses a broken link warning and restores status to ok or manual. */
+  dismissBroken(id: number): Promise<{ bookmark: Bookmark }> {
+    return call(`/api/bookmarks/${id}/dismiss-broken`, { method: 'POST' });
+  },
+
+  /** Dismisses broken link warnings on multiple bookmarks in bulk. */
+  dismissBrokenBulk(ids: number[]): Promise<{ count: number }> {
+    return call('/api/bookmarks/bulk-dismiss-broken', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  },
+
+  /** Probes a single bookmark's link on demand and updates its status. */
+  checkBookmarkLink(id: number): Promise<{ bookmark: Bookmark }> {
+    return call(`/api/bookmarks/${id}/check`, { method: 'POST' });
+  },
+
   /** Uploads a cover. The server sniffs the bytes, so the file type is checked there. */
   uploadCover(id: number, file: File): Promise<{ bookmark: Bookmark }> {
     const form = new FormData();
@@ -319,6 +337,11 @@ export const api = {
 
   startAudit(): Promise<AuditStatus> {
     return call('/api/audit-links', { method: 'POST' });
+  },
+
+  /** Starts an audit scan on only the bookmarks currently marked failed. */
+  auditBrokenLinks(): Promise<AuditStatus> {
+    return call('/api/audit-links/broken', { method: 'POST' });
   },
 
   cancelAudit(): Promise<{ cancelled: boolean }> {

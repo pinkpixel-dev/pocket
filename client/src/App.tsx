@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BookmarkX, Inbox, Pin, SearchX, TriangleAlert } from 'lucide-react';
+import { Activity, BookmarkX, Inbox, Pin, SearchX, TriangleAlert } from 'lucide-react';
+import { Button } from './components/ui/Button';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
 import { BookmarkGrid, BookmarkSkeleton } from './components/BookmarkGrid';
@@ -69,7 +70,16 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set());
   const [selectingAll, setSelectingAll] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDismissing, setBulkDismissing] = useState(false);
   const [bulkConfirm, setBulkConfirm] = useState(false);
+  const [auditingBroken, setAuditingBroken] = useState(false);
+  const auditBrokenTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (auditBrokenTimer.current) window.clearInterval(auditBrokenTimer.current);
+    };
+  }, []);
 
   const [formState, setFormState] = useState<{
     open: boolean;
@@ -192,6 +202,115 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
       if (deleted > 0) await library.reload();
     } finally {
       setBulkDeleting(false);
+    }
+  };
+
+  const handleBulkDismiss = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setBulkDismissing(true);
+    let dismissed = 0;
+    try {
+      for (let index = 0; index < ids.length; index += 500) {
+        const result = await api.dismissBrokenBulk(ids.slice(index, index + 500));
+        dismissed += result.count;
+      }
+      if (library.route.kind === 'attention') {
+        library.removeBookmarks(ids);
+      }
+      toast.success(`Marked ${pluralize(dismissed, 'bookmark')} as working.`);
+      exitSelectMode();
+      await library.reload();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Those links could not be updated.');
+      if (dismissed > 0) await library.reload();
+    } finally {
+      setBulkDismissing(false);
+    }
+  };
+
+  const handleAuditBroken = async () => {
+    setAuditingBroken(true);
+    try {
+      await api.auditBrokenLinks();
+      toast.info('Re-checking broken links in the background...');
+      if (auditBrokenTimer.current) window.clearInterval(auditBrokenTimer.current);
+      auditBrokenTimer.current = window.setInterval(async () => {
+        try {
+          const status = await api.getAuditStatus();
+          if (!status.running) {
+            if (auditBrokenTimer.current) {
+              window.clearInterval(auditBrokenTimer.current);
+              auditBrokenTimer.current = null;
+            }
+            setAuditingBroken(false);
+            await library.reload();
+            if (status.broken === 0) {
+              toast.success('All checked links are healthy.');
+            } else {
+              toast.info(`Check complete. ${pluralize(status.broken, 'broken link')} remaining.`);
+            }
+          }
+        } catch {
+          if (auditBrokenTimer.current) {
+            window.clearInterval(auditBrokenTimer.current);
+            auditBrokenTimer.current = null;
+          }
+          setAuditingBroken(false);
+        }
+      }, 1500);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Could not start check.');
+      setAuditingBroken(false);
+    }
+  };
+
+  const dismissBroken = async (bookmark: Bookmark) => {
+    markBusy(bookmark.id, true);
+    try {
+      const { bookmark: updated } = await api.dismissBroken(bookmark.id);
+      if (library.route.kind === 'attention') {
+        library.removeBookmark(bookmark.id);
+      } else {
+        library.applyBookmark(updated);
+      }
+      setFormState((current) =>
+        current.bookmark?.id === bookmark.id ? { ...current, bookmark: updated } : current,
+      );
+      toast.success('Marked as working.');
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Could not update link status.');
+    } finally {
+      markBusy(bookmark.id, false);
+    }
+  };
+
+  const checkLink = async (bookmark: Bookmark) => {
+    markBusy(bookmark.id, true);
+    try {
+      const { bookmark: updated } = await api.checkBookmarkLink(bookmark.id);
+      if (updated.metadataStatus === 'failed') {
+        library.applyBookmark(updated);
+        setFormState((current) =>
+          current.bookmark?.id === bookmark.id ? { ...current, bookmark: updated } : current,
+        );
+        toast.error(updated.metadataError ?? 'Link is still unreachable.');
+      } else {
+        if (library.route.kind === 'attention') {
+          library.removeBookmark(bookmark.id);
+        } else {
+          library.applyBookmark(updated);
+        }
+        setFormState((current) =>
+          current.bookmark?.id === bookmark.id ? { ...current, bookmark: updated } : current,
+        );
+        toast.success('Link is working.');
+      }
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Could not check link.');
+    } finally {
+      markBusy(bookmark.id, false);
     }
   };
 
@@ -453,6 +572,8 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
     onFillWithAi: library.aiSettings?.configured
       ? (bookmark: Bookmark) => void fillWithAi(bookmark)
       : undefined,
+    onDismissBroken: (bookmark: Bookmark) => void dismissBroken(bookmark),
+    onCheckLink: (bookmark: Bookmark) => void checkLink(bookmark),
   };
 
   const isSettings = library.route.kind === 'settings';
@@ -501,7 +622,28 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
                 onClear={() => setSelectedIds(new Set())}
                 onDelete={() => setBulkConfirm(true)}
                 onExit={exitSelectMode}
+                onDismissBroken={library.route.kind === 'attention' ? handleBulkDismiss : undefined}
+                dismissing={bulkDismissing}
               />
+            ) : library.route.kind === 'attention' && library.bookmarks.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface/60 px-3 py-2 sm:px-6">
+                <div className="flex items-center gap-2 text-[0.8125rem] text-ink-muted">
+                  <TriangleAlert size={15} className="shrink-0 text-danger" aria-hidden />
+                  <span>{pluralize(library.total, 'bookmark')} flagged as unreachable or broken</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => void handleAuditBroken()}
+                    loading={auditingBroken}
+                    title="Re-test these links with the updated link checker"
+                  >
+                    <Activity size={14} aria-hidden />
+                    {auditingBroken ? 'Checking...' : `Re-check all (${library.total})`}
+                  </Button>
+                </div>
+              </div>
             ) : null
           }
         />
@@ -592,6 +734,8 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
         onClose={() => setFormState((current) => ({ ...current, open: false }))}
         onSubmit={(draft) => void submitBookmark(draft)}
         onCoverChanged={applyCoverChange}
+        onDismissBroken={(b) => void dismissBroken(b)}
+        onCheckLink={(b) => void checkLink(b)}
       />
 
       <MoveDialog

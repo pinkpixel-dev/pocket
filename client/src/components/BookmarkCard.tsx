@@ -1,6 +1,8 @@
 import clsx from 'clsx';
 import {
+  Activity,
   AlertTriangle,
+  CheckCircle2,
   ExternalLink,
   FolderInput,
   ImageUp,
@@ -28,6 +30,8 @@ export interface BookmarkActions {
   onDelete: (bookmark: Bookmark) => void;
   /** Undefined when no OpenAI key is set, which removes the menu item. */
   onFillWithAi?: (bookmark: Bookmark) => void;
+  onDismissBroken?: (bookmark: Bookmark) => void;
+  onCheckLink?: (bookmark: Bookmark) => void;
 }
 
 export interface SelectionProps {
@@ -94,8 +98,27 @@ export function isFullyFilled(bookmark: Bookmark): boolean {
 
 export function buildMenuItems(bookmark: Bookmark, actions: BookmarkActions) {
   const filling = bookmark.aiStatus === 'pending';
+  const isBroken = bookmark.metadataStatus === 'failed';
 
   return [
+    ...(isBroken && actions.onDismissBroken
+      ? [
+          {
+            label: 'Mark as working',
+            icon: <CheckCircle2 size={15} />,
+            onSelect: () => actions.onDismissBroken?.(bookmark),
+          },
+        ]
+      : []),
+    ...(actions.onCheckLink
+      ? [
+          {
+            label: 'Re-check link',
+            icon: <Activity size={15} />,
+            onSelect: () => actions.onCheckLink?.(bookmark),
+          },
+        ]
+      : []),
     { label: 'Edit details', icon: <Pencil size={15} />, onSelect: () => actions.onEdit(bookmark) },
     {
       label: bookmark.coverUrl ? 'Change cover' : 'Add a cover',

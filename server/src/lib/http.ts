@@ -51,6 +51,11 @@ interface FetchOptions {
   userAgent?: string;
   /** Whole-call budget, redirects included. Defaults to the configured one. */
   timeoutMs?: number;
+  /**
+   * True for link probes that only need status headers. Discards the body
+   * immediately without failing on Content-Length limits.
+   */
+  probeOnly?: boolean;
 }
 
 /**
@@ -96,7 +101,7 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
 
   for (let hop = 0; hop <= config.fetch.maxRedirects; hop += 1) {
     assertFetchable(current);
-    if (Date.now() >= deadline) throw new FetchError(`Timed out fetching ${startUrl} after ${seconds}s`);
+    if (Date.now() >= deadline) throw new TimeoutError(`Timed out fetching ${startUrl} after ${seconds}s`);
 
     let response: Awaited<ReturnType<typeof request>>;
     try {
@@ -115,7 +120,23 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
     } catch (error) {
       if (error instanceof BlockedAddressError) throw new FetchError(error.message, error);
       if (expiry.aborted) throw new TimeoutError(`${current.hostname} did not answer within ${seconds}s`, error);
+      const errName = (error as { name?: string })?.name;
+      const errCode = (error as { code?: string })?.code;
       const reason = error instanceof Error ? error.message : String(error);
+      if (
+        errName === 'ConnectTimeoutError' ||
+        errName === 'HeadersTimeoutError' ||
+        errName === 'BodyTimeoutError' ||
+        errName === 'SocketTimeoutError' ||
+        errCode === 'UND_ERR_CONNECT_TIMEOUT' ||
+        errCode === 'UND_ERR_HEADERS_TIMEOUT' ||
+        errCode === 'UND_ERR_BODY_TIMEOUT' ||
+        errCode === 'UND_ERR_SOCKET_TIMEOUT' ||
+        errCode === 'ETIMEDOUT' ||
+        /timeout/i.test(reason)
+      ) {
+        throw new TimeoutError(`${current.hostname} did not answer within ${seconds}s: ${reason}`, error);
+      }
       throw new FetchError(`Could not reach ${current.hostname}: ${reason}`, error);
     }
 
@@ -135,6 +156,19 @@ export async function safeFetch(startUrl: string, options: FetchOptions): Promis
 
     const rawType = response.headers['content-type'];
     const contentType = (Array.isArray(rawType) ? rawType[0] : rawType) ?? '';
+
+    // A probe only needs to confirm the host and status; avoid reading the
+    // body or throwing on large responses.
+    if (options.probeOnly) {
+      discardBody(response.body);
+      return {
+        finalUrl: current.href,
+        status,
+        contentType: contentType.split(';')[0]?.trim().toLowerCase() ?? '',
+        body: Buffer.alloc(0),
+        truncated: false,
+      };
+    }
 
     const declared = Number(response.headers['content-length']);
     if (Number.isFinite(declared) && declared > options.maxBytes) {
@@ -315,6 +349,7 @@ async function attemptProbe(url: string, timeoutMs: number, userAgent: string): 
       accept: '*/*',
       timeoutMs,
       userAgent,
+      probeOnly: true,
     });
     return classify(url, result.status);
   } catch (error) {
@@ -333,15 +368,18 @@ async function attemptProbe(url: string, timeoutMs: number, userAgent: string): 
       };
     }
 
-    // No DNS record, refused connection, broken TLS: the host itself is not
-    // there, and a different user agent will not change that.
+    const reason = error instanceof Error ? error.message : String(error);
+    const isDnsError = /ENOTFOUND/i.test(reason) || /getaddrinfo/i.test(reason);
+
+    // If it's a connection reset, protocol error, or connection refusal,
+    // a browser user agent might still be accepted by the host.
     return {
       result: {
         verdict: 'dead',
         status: 0,
-        error: error instanceof Error ? error.message : String(error),
+        error: reason,
       },
-      retry: false,
+      retry: !isDnsError,
     };
   }
 }

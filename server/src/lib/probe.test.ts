@@ -125,3 +125,22 @@ test('a host that never answers times out on its own and stays inconclusive', as
     },
   );
 });
+
+test('a working page whose content-length exceeds the probe byte budget is alive', async () => {
+  await withServer(
+    (_req, res) => {
+      const payload = 'x'.repeat(250_000);
+      res.writeHead(200, {
+        'content-type': 'text/html',
+        'content-length': String(payload.length),
+      });
+      res.end(payload);
+    },
+    async (base) => {
+      const result = await probeUrl(`${base}/large`);
+      assert.equal(result.verdict, 'alive');
+      assert.equal(result.status, 200);
+      assert.equal(result.error, null);
+    },
+  );
+});

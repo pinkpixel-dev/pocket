@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Activity, AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { SelectField, TextArea, TextField } from './ui/Field';
@@ -25,6 +25,8 @@ interface BookmarkFormDialogProps {
   onSubmit: (draft: BookmarkDraft) => void;
   /** Covers save on their own, so the change has to travel back immediately. */
   onCoverChanged: (bookmark: Bookmark) => void;
+  onDismissBroken?: (bookmark: Bookmark) => void;
+  onCheckLink?: (bookmark: Bookmark) => void;
 }
 
 const EMPTY: BookmarkDraft = {
@@ -53,6 +55,8 @@ export function BookmarkFormDialog({
   onClose,
   onSubmit,
   onCoverChanged,
+  onDismissBroken,
+  onCheckLink,
 }: BookmarkFormDialogProps) {
   const [draft, setDraft] = useState<BookmarkDraft>(EMPTY);
   const [showDetails, setShowDetails] = useState(false);
@@ -152,6 +156,42 @@ export function BookmarkFormDialog({
           error={error}
           onChange={(event) => update('url', event.target.value)}
         />
+
+        {mode === 'edit' && bookmark && bookmark.metadataStatus === 'failed' ? (
+          <div className="flex flex-wrap items-center justify-between gap-2.5 rounded-lg border border-danger/40 bg-danger/10 p-3 text-[0.8125rem]">
+            <div className="flex items-center gap-2 text-danger">
+              <AlertTriangle size={16} className="shrink-0" aria-hidden />
+              <span className="font-medium">
+                {bookmark.metadataError ?? 'Flagged as broken link'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {onCheckLink ? (
+                <Button
+                  size="sm"
+                  type="button"
+                  onClick={() => onCheckLink(bookmark)}
+                  title="Re-test this link now"
+                >
+                  <Activity size={14} aria-hidden />
+                  Re-check link
+                </Button>
+              ) : null}
+              {onDismissBroken ? (
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="secondary"
+                  onClick={() => onDismissBroken(bookmark)}
+                  title="Clear the broken status and mark as working"
+                >
+                  <CheckCircle2 size={14} aria-hidden />
+                  Mark as working
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
 
         {mode === 'edit' && bookmark ? (
           <CoverPicker bookmark={bookmark} onChanged={onCoverChanged} autoFocus={focusCover} />

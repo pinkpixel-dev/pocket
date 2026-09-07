@@ -6,8 +6,11 @@ import {
   createBookmark,
   deleteBookmark,
   deleteBookmarks,
+  dismissBroken,
+  dismissBrokenBulk,
   getBookmark,
   listBookmarks,
+  probeSingleBookmark,
   setPinned,
   updateBookmark,
 } from '../services/bookmarks.js';
@@ -129,6 +132,14 @@ bookmarksRouter.post('/bulk-delete', async (req, res) => {
   res.json({ deleted: await deleteBookmarks(userIdOf(req), ids) });
 });
 
+bookmarksRouter.post('/bulk-dismiss-broken', (req, res) => {
+  const { ids } = parseBody(
+    z.object({ ids: z.array(z.number().int().positive()).min(1).max(1000) }),
+    req.body,
+  );
+  res.json({ count: dismissBrokenBulk(userIdOf(req), ids) });
+});
+
 bookmarksRouter.get('/:id', (req, res) => {
   res.json({ bookmark: getBookmark(userIdOf(req), idParam.parse(req.params.id)) });
 });
@@ -153,6 +164,16 @@ bookmarksRouter.post('/:id/pin', (req, res) => {
   const id = idParam.parse(req.params.id);
   const { isPinned } = parseBody(z.object({ isPinned: z.boolean() }), req.body);
   res.json({ bookmark: setPinned(userIdOf(req), id, isPinned) });
+});
+
+bookmarksRouter.post('/:id/dismiss-broken', (req, res) => {
+  const id = idParam.parse(req.params.id);
+  res.json({ bookmark: dismissBroken(userIdOf(req), id) });
+});
+
+bookmarksRouter.post('/:id/check', async (req, res) => {
+  const id = idParam.parse(req.params.id);
+  res.json({ bookmark: await probeSingleBookmark(userIdOf(req), id) });
 });
 
 bookmarksRouter.post('/:id/refresh', async (req, res) => {

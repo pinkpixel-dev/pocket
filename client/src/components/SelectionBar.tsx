@@ -1,4 +1,4 @@
-import { CheckCheck, Trash2, X } from 'lucide-react';
+import { CheckCheck, CheckCircle2, Trash2, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { pluralize } from '../lib/format';
 
@@ -13,6 +13,8 @@ interface SelectionBarProps {
   onClear: () => void;
   onDelete: () => void;
   onExit: () => void;
+  onDismissBroken?: () => void;
+  dismissing?: boolean;
 }
 
 /**
@@ -30,6 +32,8 @@ export function SelectionBar({
   onClear,
   onDelete,
   onExit,
+  onDismissBroken,
+  dismissing = false,
 }: SelectionBarProps) {
   return (
     <div
@@ -52,6 +56,20 @@ export function SelectionBar({
         {allSelected ? 'Clear' : `Select all ${total}`}
       </Button>
 
+      {onDismissBroken ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onDismissBroken}
+          loading={dismissing}
+          disabled={count === 0}
+          title={count === 0 ? 'Pick a bookmark first' : `Mark ${pluralize(count, 'bookmark')} as working`}
+        >
+          <CheckCircle2 size={15} aria-hidden />
+          Mark as working{count > 0 ? ` (${count})` : ''}
+        </Button>
+      ) : null}
+
       <Button
         size="sm"
         variant="danger"
@@ -64,7 +82,7 @@ export function SelectionBar({
         Delete{count > 0 ? ` (${count})` : ''}
       </Button>
 
-      <Button size="sm" variant="ghost" onClick={onExit} disabled={deleting}>
+      <Button size="sm" variant="ghost" onClick={onExit} disabled={deleting || dismissing}>
         Done
       </Button>
     </div>

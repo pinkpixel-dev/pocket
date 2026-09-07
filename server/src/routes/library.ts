@@ -262,7 +262,17 @@ libraryRouter.post('/audit-links', (req, res) => {
   res.json(startLibraryAudit(userIdOf(req)));
 });
 
+libraryRouter.post('/audit-links/broken', (req, res) => {
+  const userId = userIdOf(req);
+  const rows = db
+    .prepare("SELECT id FROM bookmarks WHERE user_id = ? AND metadata_status = 'failed'")
+    .all(userId) as { id: number }[];
+  const ids = rows.map((r) => r.id);
+  res.json(startLibraryAudit(userId, { ids }));
+});
+
 libraryRouter.post('/audit-links/cancel', (req, res) => {
   res.json({ cancelled: cancelLibraryAudit(userIdOf(req)) });
 });
+
 
