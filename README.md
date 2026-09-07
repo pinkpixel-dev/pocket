@@ -8,7 +8,7 @@ Everyone who signs in gets their own library. If a few people share a NAS, they 
 
 I built it because browser bookmark bars stop being useful somewhere around 200 links, and most of the alternatives are either a hosted service or a full read-it-later platform. This one just saves links, organizes them, and finds them again.
 
-![Pocket grid view](DOCS/images/grid-view.png)
+![Pocket grid view](screenshot.png)
 
 Grid view above. There is also a [compact list view](DOCS/images/list-view.png) for scanning, and the whole thing [works on a phone](DOCS/images/mobile.png).
 
