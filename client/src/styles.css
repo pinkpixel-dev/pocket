@@ -1,0 +1,137 @@
+@import 'tailwindcss';
+
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/manrope';
+@import '@fontsource-variable/jetbrains-mono';
+
+/*
+  Pocket commits to one dark treatment rather than shipping a half-considered
+  light mode. Everything below is a token; nothing improvises a colour.
+*/
+@theme {
+  --font-display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', Georgia, serif;
+  --font-sans: 'Manrope Variable', 'Manrope', 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-canvas: oklch(0.169 0.004 85);
+  --color-surface: oklch(0.213 0.005 85);
+  --color-raised: oklch(0.253 0.006 85);
+  --color-hover: oklch(0.288 0.007 85);
+  --color-line: oklch(0.316 0.008 85);
+  --color-line-strong: oklch(0.404 0.01 85);
+
+  --color-ink: oklch(0.972 0.003 85);
+  --color-ink-muted: oklch(0.724 0.008 85);
+  --color-ink-faint: oklch(0.576 0.008 85);
+
+  --color-accent: oklch(0.795 0.146 71);
+  --color-accent-hover: oklch(0.845 0.14 71);
+  --color-accent-ink: oklch(0.22 0.05 71);
+  --color-accent-soft: oklch(0.795 0.146 71 / 0.14);
+
+  --color-danger: oklch(0.672 0.176 26);
+  --color-danger-soft: oklch(0.672 0.176 26 / 0.16);
+  --color-positive: oklch(0.76 0.13 155);
+
+  --radius-card: 0.875rem;
+
+  --ease-out-soft: cubic-bezier(0.32, 0.72, 0.24, 1);
+}
+
+@layer base {
+  html {
+    background-color: var(--color-canvas);
+    color-scheme: dark;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  /* Never remove the ring; only make it match the surface it sits on. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 0.375rem;
+  }
+
+  ::selection {
+    background: var(--color-accent-soft);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  /* A faint paper grain keeps large empty areas from reading as flat black. */
+  .texture-grain {
+    background-image: radial-gradient(
+      circle at 1px 1px,
+      oklch(1 0 0 / 0.022) 1px,
+      transparent 0
+    );
+    background-size: 4px 4px;
+  }
+}
+
+@layer components {
+  .scroll-area {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+
+  .scroll-area::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .scroll-area::-webkit-scrollbar-thumb {
+    background-color: var(--color-line-strong);
+    border: 3px solid var(--color-canvas);
+    border-radius: 999px;
+  }
+
+  .clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

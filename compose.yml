@@ -1,0 +1,30 @@
+services:
+  pocket:
+    build: .
+    image: pocket:latest
+    container_name: pocket
+    restart: unless-stopped
+    # Forwards SIGTERM properly so SQLite gets a clean checkpoint on stop.
+    init: true
+    ports:
+      - '8420:8420'
+    volumes:
+      # Everything Pocket keeps lives here: the database and the cached images.
+      - ./data:/data
+    environment:
+      TZ: ${TZ:-UTC}
+      # Set to false only on a network where you trust every reachable host.
+      POCKET_BLOCK_PRIVATE_ADDRESSES: 'true'
+    # If your NAS share is owned by a different account, set the ids here and
+    # make sure ./data is writable by them.
+    # user: '1000:1000'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:8420/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
