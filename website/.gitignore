@@ -1,0 +1,6 @@
+# Docusaurus
+.docusaurus/
+build/
+.cache/
+node_modules/
+*.log
