@@ -14,10 +14,11 @@ interface MenuProps {
   items: MenuItem[];
   trigger: (props: { onClick: (event: React.MouseEvent) => void; 'aria-expanded': boolean; id: string }) => ReactNode;
   align?: 'start' | 'end';
+  menuClassName?: string;
 }
 
 /** A small roving-focus menu: arrows move, Enter picks, Escape returns focus. */
-export function Menu({ label, items, trigger, align = 'end' }: MenuProps) {
+export function Menu({ label, items, trigger, align = 'end', menuClassName }: MenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -92,9 +93,10 @@ export function Menu({ label, items, trigger, align = 'end' }: MenuProps) {
           role="menu"
           aria-label={label}
           className={clsx(
-            'absolute top-[calc(100%+0.375rem)] z-30 min-w-48 overflow-hidden rounded-xl',
+            'absolute z-30 min-w-48 overflow-hidden rounded-xl',
             'border border-line bg-raised p-1 shadow-xl shadow-black/50',
             align === 'end' ? 'right-0' : 'left-0',
+            menuClassName ?? 'top-[calc(100%+0.375rem)]',
           )}
         >
           {items.map((item) => (

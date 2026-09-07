@@ -2,6 +2,12 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.1.2 - September 7, 2026
+
+### 🎨 Cards
+
+- Shift the action dropdown menu up on bookmark cards so all actions, including Delete, fit cleanly within card bounds without clipping
+
 ## 2.1.1 - September 7, 2026
 
 ### 🐛 Fixes

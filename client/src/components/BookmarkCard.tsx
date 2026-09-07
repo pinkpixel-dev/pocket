@@ -222,6 +222,7 @@ export function BookmarkCard({
           <Menu
             label={`Actions for ${title}`}
             items={buildMenuItems(bookmark, actions)}
+            menuClassName="top-2.5"
             trigger={(triggerProps) => (
               <button
                 type="button"

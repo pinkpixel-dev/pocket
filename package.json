@@ -1,6 +1,6 @@
 {
   "name": "pocket",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "private": true,
   "description": "A private, self-hosted bookmark library for your NAS.",
   "license": "Apache-2.0",
