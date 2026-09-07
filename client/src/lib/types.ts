@@ -83,6 +83,15 @@ export interface ImportSummary {
 export type SortKey = 'newest' | 'oldest' | 'title' | 'domain' | 'updated';
 export type ViewMode = 'grid' | 'list';
 export type CardSize = 'small' | 'medium' | 'large';
+export type AccentColor =
+  | 'gold'
+  | 'red'
+  | 'orange'
+  | 'lime-green'
+  | 'cyan'
+  | 'blue'
+  | 'purple'
+  | 'pink';
 
 export interface BookmarkDraft {
   url: string;

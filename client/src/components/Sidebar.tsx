@@ -163,7 +163,13 @@ export function Sidebar({
       >
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
           <a href="#/" onClick={onClose} className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="" aria-hidden="true" className="h-8 w-8 shrink-0 object-contain" />
+            <img
+              src="/logo.png"
+              alt=""
+              aria-hidden="true"
+              className="h-8 w-8 shrink-0 object-contain transition-[filter] duration-200"
+              style={{ filter: 'var(--logo-filter, none)' }}
+            />
             <span className="font-display text-lg font-semibold tracking-tight text-ink">Pocket</span>
           </a>
           <button

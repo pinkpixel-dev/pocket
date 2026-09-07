@@ -377,8 +377,10 @@ export default function App() {
               collections={library.collections}
               tags={library.tags}
               cardSize={library.cardSize}
+              accentColor={library.accentColor}
               aiSettings={library.aiSettings}
               onCardSizeChange={library.setCardSize}
+              onAccentColorChange={library.setAccentColor}
               onAiSettingsChange={library.setAiSettings}
               onChanged={() => void library.reload()}
               onEditCollection={openCollectionEditor}

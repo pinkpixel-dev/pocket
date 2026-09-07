@@ -28,6 +28,7 @@
   --color-accent-hover: oklch(0.845 0.14 71);
   --color-accent-ink: oklch(0.22 0.05 71);
   --color-accent-soft: oklch(0.795 0.146 71 / 0.14);
+  --logo-filter: none;
 
   --color-danger: oklch(0.672 0.176 26);
   --color-danger-soft: oklch(0.672 0.176 26 / 0.16);

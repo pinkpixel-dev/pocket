@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type BookmarkFilters } from '../lib/api';
 import { parseRoute, type Route } from '../lib/route';
-import type { AiSettings, Bookmark, CardSize, Collection, SortKey, Stats, Tag, ViewMode } from '../lib/types';
+import type { AiSettings, Bookmark, CardSize, Collection, SortKey, Stats, Tag, ViewMode, AccentColor } from '../lib/types';
+import { applyAccent, normalizeAccentId, ACCENT_STORAGE_KEY } from '../lib/theme';
 
-const STORAGE_KEYS = { view: 'pocket:view', sort: 'pocket:sort', cardSize: 'pocket:card-size' } as const;
+const STORAGE_KEYS = {
+  view: 'pocket:view',
+  sort: 'pocket:sort',
+  cardSize: 'pocket:card-size',
+  accent: ACCENT_STORAGE_KEY,
+} as const;
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -74,6 +80,8 @@ export interface Library {
   setView: (value: ViewMode) => void;
   cardSize: CardSize;
   setCardSize: (value: CardSize) => void;
+  accentColor: AccentColor;
+  setAccentColor: (value: AccentColor) => void;
   reload: () => Promise<void>;
   reloadSidebar: () => Promise<void>;
   applyBookmark: (bookmark: Bookmark) => void;
@@ -103,6 +111,14 @@ export function useLibrary(): Library {
   const [cardSize, setCardSizeState] = useState<CardSize>(() =>
     readStored(STORAGE_KEYS.cardSize, ['small', 'medium', 'large'] as const, 'medium'),
   );
+  const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
+    try {
+      const stored = window.localStorage.getItem(STORAGE_KEYS.accent);
+      return normalizeAccentId(stored);
+    } catch {
+      return 'gold';
+    }
+  });
 
   const requestId = useRef(0);
 
@@ -194,6 +210,17 @@ export function useLibrary(): Library {
     writeStored(STORAGE_KEYS.cardSize, value);
   }, []);
 
+  const setAccentColor = useCallback((value: AccentColor) => {
+    const normalized = normalizeAccentId(value);
+    setAccentColorState(normalized);
+    writeStored(STORAGE_KEYS.accent, normalized);
+    applyAccent(normalized);
+  }, []);
+
+  useEffect(() => {
+    applyAccent(accentColor);
+  }, [accentColor]);
+
   /** Swaps one card in place so an edit does not reshuffle the whole grid. */
   const applyBookmark = useCallback(
     (bookmark: Bookmark) => {
@@ -241,6 +268,8 @@ export function useLibrary(): Library {
     setView,
     cardSize,
     setCardSize,
+    accentColor,
+    setAccentColor,
     reload,
     reloadSidebar,
     applyBookmark,

@@ -1,17 +1,21 @@
+import clsx from 'clsx';
 import { TransferPanel } from './settings/TransferPanel';
 import { OrganizePanel } from './settings/OrganizePanel';
 import { AiPanel } from './settings/AiPanel';
 import { SelectField } from './ui/Field';
 import { pluralize } from '../lib/format';
-import type { AiSettings, CardSize, Collection, Stats, Tag } from '../lib/types';
+import { ACCENT_COLORS } from '../lib/theme';
+import type { AccentColor, AiSettings, CardSize, Collection, Stats, Tag } from '../lib/types';
 
 interface SettingsViewProps {
   stats: Stats | null;
   collections: Collection[];
   tags: Tag[];
   cardSize: CardSize;
+  accentColor: AccentColor;
   aiSettings: AiSettings | null;
   onCardSizeChange: (value: CardSize) => void;
+  onAccentColorChange: (value: AccentColor) => void;
   onAiSettingsChange: (settings: AiSettings) => void;
   onChanged: () => void;
   onEditCollection: (collection: Collection) => void;
@@ -37,8 +41,10 @@ export function SettingsView({
   collections,
   tags,
   cardSize,
+  accentColor,
   aiSettings,
   onCardSizeChange,
+  onAccentColorChange,
   onAiSettingsChange,
   onChanged,
   onEditCollection,
@@ -81,6 +87,59 @@ export function SettingsView({
             </option>
           ))}
         </SelectField>
+
+        <div className="mt-6 border-t border-line/60 pt-5">
+          <label className="block text-[0.875rem] font-medium text-ink">
+            Accent color
+          </label>
+          <p className="mt-1 text-[0.8125rem] text-ink-faint">
+            Personalize buttons, selection highlights, active indicators, and the Pocket logo.
+          </p>
+
+          <div
+            role="radiogroup"
+            aria-label="Accent color"
+            className="mt-3.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4"
+          >
+            {ACCENT_COLORS.map((color) => {
+              const active = accentColor === color.id;
+              return (
+                <button
+                  key={color.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={active}
+                  aria-label={color.id === 'gold' ? `${color.name} (default)` : color.name}
+                  onClick={() => onAccentColorChange(color.id)}
+                  className={clsx(
+                    'group flex min-h-12 items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-[0.875rem] transition-all',
+                    active
+                      ? 'border-accent bg-raised font-semibold text-ink shadow-sm'
+                      : 'border-line bg-surface text-ink-muted hover:border-line-strong hover:bg-hover hover:text-ink',
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="relative flex h-5 w-5 shrink-0 items-center justify-center rounded-full shadow-inner ring-1 ring-black/20"
+                    style={{ backgroundColor: color.swatch }}
+                  >
+                    {active ? (
+                      <span className="h-1.5 w-1.5 rounded-full bg-white shadow-xs" />
+                    ) : null}
+                  </span>
+                  <span className="truncate">
+                    {color.name}
+                    {color.id === 'gold' ? (
+                      <span className="ml-1 text-[0.75rem] font-normal text-ink-faint">
+                        (default)
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </Panel>
 
       <Panel title="Filling in links with AI">

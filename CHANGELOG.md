@@ -2,6 +2,14 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 0.6.0 - September 7, 2026
+
+### 🎨 Appearance
+
+- Add accent color selection in Settings Appearance with eight options: Red, Orange, Gold (default), Lime green, Cyan, Blue, Purple, and Pink
+- Synchronize the Pocket logo color to match the chosen accent using tuned CSS hue and saturation filters
+- Persist accent preference in local storage with immediate pre-mount initialization to eliminate theme flashing
+
 ## 0.5.0 - September 7, 2026
 
 ### 🎨 Branding
