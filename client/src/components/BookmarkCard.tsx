@@ -13,7 +13,7 @@ import {
 import { Menu } from './ui/Menu';
 import { Favicon, Preview } from './Preview';
 import { displayUrl, relativeTime } from '../lib/format';
-import type { Bookmark, Collection } from '../lib/types';
+import type { Bookmark, CardSize, Collection } from '../lib/types';
 
 export interface BookmarkActions {
   onEdit: (bookmark: Bookmark) => void;
@@ -26,8 +26,50 @@ export interface BookmarkActions {
 interface CardProps extends BookmarkActions {
   bookmark: Bookmark;
   collection: Collection | undefined;
+  size: CardSize;
   busy?: boolean;
 }
+
+/**
+ * Cards shrink by dropping detail, not by squashing text. Small keeps the
+ * title, site and date; medium trims the description to a line; large is the
+ * full card.
+ */
+const SIZE_STYLES = {
+  small: {
+    preview: 'aspect-16/9',
+    body: 'gap-1.5 p-2.5',
+    title: 'truncate text-[0.8125rem]',
+    meta: 'text-[0.625rem]',
+    trigger: 'h-8 w-8',
+    controls: 'top-2 right-2 gap-1',
+    icon: 14,
+    description: false,
+    tags: 0,
+  },
+  medium: {
+    preview: 'aspect-16/10',
+    body: 'gap-1.5 p-3',
+    title: 'clamp-2 text-[0.875rem]',
+    meta: 'text-[0.6875rem]',
+    trigger: 'h-9 w-9',
+    controls: 'top-2 right-2 gap-1.5',
+    icon: 15,
+    description: 'truncate',
+    tags: 2,
+  },
+  large: {
+    preview: 'aspect-16/10',
+    body: 'gap-2 p-3.5',
+    title: 'clamp-2 text-[0.9375rem]',
+    meta: 'text-[0.6875rem]',
+    trigger: 'h-9 w-9',
+    controls: 'top-2.5 right-2.5 gap-1.5',
+    icon: 16,
+    description: 'clamp-2',
+    tags: 3,
+  },
+} as const;
 
 export function buildMenuItems(bookmark: Bookmark, actions: BookmarkActions) {
   return [
@@ -49,12 +91,14 @@ export function buildMenuItems(bookmark: Bookmark, actions: BookmarkActions) {
 }
 
 const TRIGGER_CLASS =
-  'grid h-9 w-9 place-items-center rounded-lg border border-line bg-canvas/85 text-ink-muted ' +
+  'grid place-items-center rounded-lg border border-line bg-canvas/85 text-ink-muted ' +
   'backdrop-blur-sm transition-colors hover:bg-hover hover:text-ink';
 
-export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardProps) {
+export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: CardProps) {
   const title = bookmark.title || displayUrl(bookmark.url, 60);
   const failed = bookmark.metadataStatus === 'failed';
+  const style = SIZE_STYLES[size];
+  const triggerClass = clsx(TRIGGER_CLASS, style.trigger);
 
   return (
     <article
@@ -71,15 +115,15 @@ export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardPro
         rel="noreferrer noopener"
         className="block focus-visible:outline-offset-[-2px]"
       >
-        <Preview bookmark={bookmark} className="aspect-16/10 w-full" />
+        <Preview bookmark={bookmark} className={clsx(style.preview, 'w-full')} />
         <span className="sr-only">Open {title} in a new tab</span>
       </a>
 
       {/* Controls sit above the link target so opening a card is never ambiguous. */}
-      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+      <div className={clsx('absolute flex items-center', style.controls)}>
         {bookmark.isPinned ? (
-          <span className={clsx(TRIGGER_CLASS, 'text-accent')} title="Pinned">
-            <Pin size={15} aria-hidden />
+          <span className={clsx(triggerClass, 'text-accent')} title="Pinned">
+            <Pin size={style.icon - 1} aria-hidden />
             <span className="sr-only">Pinned</span>
           </span>
         ) : null}
@@ -93,31 +137,36 @@ export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardPro
               {...triggerProps}
               aria-haspopup="menu"
               aria-label={`Actions for ${title}`}
-              className={TRIGGER_CLASS}
+              className={triggerClass}
             >
-              <MoreVertical size={16} aria-hidden />
+              <MoreVertical size={style.icon} aria-hidden />
             </button>
           )}
         />
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-2 p-3.5">
+      <div className={clsx('flex min-w-0 flex-1 flex-col', style.body)}>
         <div className="flex min-w-0 items-start gap-2">
           <span className="mt-0.5">
             <Favicon bookmark={bookmark} />
           </span>
-          <h3 className="clamp-2 min-w-0 flex-1 text-[0.9375rem] leading-snug font-semibold text-ink">
+          <h3 className={clsx('min-w-0 flex-1 leading-snug font-semibold text-ink', style.title)}>
             <a href={bookmark.url} target="_blank" rel="noreferrer noopener" className="hover:text-accent">
               {title}
             </a>
           </h3>
         </div>
 
-        {bookmark.description ? (
-          <p className="clamp-2 text-[0.8125rem] text-ink-muted">{bookmark.description}</p>
+        {style.description && bookmark.description ? (
+          <p className={clsx('text-[0.8125rem] text-ink-muted', style.description)}>{bookmark.description}</p>
         ) : null}
 
-        <div className="mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 font-mono text-[0.6875rem] text-ink-faint">
+        <div
+          className={clsx(
+            'mt-auto flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 font-mono text-ink-faint',
+            style.meta,
+          )}
+        >
           <span className="truncate" title={bookmark.url}>
             {bookmark.domain || displayUrl(bookmark.url, 28)}
           </span>
@@ -131,7 +180,7 @@ export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardPro
           ) : null}
         </div>
 
-        {collection || bookmark.tags.length > 0 ? (
+        {style.tags > 0 && (collection || bookmark.tags.length > 0) ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {collection ? (
               <a
@@ -147,7 +196,7 @@ export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardPro
               </a>
             ) : null}
 
-            {bookmark.tags.slice(0, 3).map((tag) => (
+            {bookmark.tags.slice(0, style.tags).map((tag) => (
               <a
                 key={tag}
                 href={`#/tags/${encodeURIComponent(tag)}`}
@@ -156,8 +205,10 @@ export function BookmarkCard({ bookmark, collection, busy, ...actions }: CardPro
                 #{tag}
               </a>
             ))}
-            {bookmark.tags.length > 3 ? (
-              <span className="font-mono text-[0.6875rem] text-ink-faint">+{bookmark.tags.length - 3}</span>
+            {bookmark.tags.length > style.tags ? (
+              <span className="font-mono text-[0.6875rem] text-ink-faint">
+                +{bookmark.tags.length - style.tags}
+              </span>
             ) : null}
           </div>
         ) : null}

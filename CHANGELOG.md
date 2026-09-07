@@ -2,6 +2,16 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 0.2.0 - September 7, 2026
+
+### 🖼️ Card sizes
+
+- Grid view now has small, medium, and large cards, chosen from a new Appearance section in Settings
+- Medium is the default. Large is the card size Pocket shipped with in 0.1.0
+- Smaller cards fit more columns and trim detail instead of squashing it: medium clamps the description to one line, small drops the description and tag row and keeps the title, site, and date
+- The loading placeholders match whichever size is active, so the layout does not jump
+- The choice is saved per browser under `pocket:card-size`
+
 ## 0.1.0 - September 7, 2026
 
 First release. Pocket is usable as a bookmark manager.

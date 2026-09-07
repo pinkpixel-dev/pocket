@@ -1,15 +1,24 @@
 import { TransferPanel } from './settings/TransferPanel';
 import { OrganizePanel } from './settings/OrganizePanel';
+import { SelectField } from './ui/Field';
 import { pluralize } from '../lib/format';
-import type { Collection, Stats, Tag } from '../lib/types';
+import type { CardSize, Collection, Stats, Tag } from '../lib/types';
 
 interface SettingsViewProps {
   stats: Stats | null;
   collections: Collection[];
   tags: Tag[];
+  cardSize: CardSize;
+  onCardSizeChange: (value: CardSize) => void;
   onChanged: () => void;
   onEditCollection: (collection: Collection) => void;
 }
+
+const CARD_SIZES: Array<{ value: CardSize; label: string }> = [
+  { value: 'small', label: 'Small — most links on screen' },
+  { value: 'medium', label: 'Medium — the default' },
+  { value: 'large', label: 'Large — big previews' },
+];
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -24,6 +33,8 @@ export function SettingsView({
   stats,
   collections,
   tags,
+  cardSize,
+  onCardSizeChange,
   onChanged,
   onEditCollection,
 }: SettingsViewProps) {
@@ -50,6 +61,21 @@ export function SettingsView({
             "Refresh preview" on a card to try again.
           </p>
         ) : null}
+      </Panel>
+
+      <Panel title="Appearance">
+        <SelectField
+          label="Card size"
+          hint="How big the cards are in grid view. Smaller cards fit more links on screen and drop the description to stay readable."
+          value={cardSize}
+          onChange={(event) => onCardSizeChange(event.target.value as CardSize)}
+        >
+          {CARD_SIZES.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </SelectField>
       </Panel>
 
       <Panel title="Backup and transfer">

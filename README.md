@@ -19,6 +19,7 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Search across titles, URLs, descriptions, site names, and tags.
 - Pinned bookmarks, which float to the top of every view.
 - Grid view for browsing and list view for scanning or tidying up.
+- Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
 

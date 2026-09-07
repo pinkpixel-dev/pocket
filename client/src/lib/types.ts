@@ -56,6 +56,7 @@ export interface ImportSummary {
 
 export type SortKey = 'newest' | 'oldest' | 'title' | 'domain' | 'updated';
 export type ViewMode = 'grid' | 'list';
+export type CardSize = 'small' | 'medium' | 'large';
 
 export interface BookmarkDraft {
   url: string;

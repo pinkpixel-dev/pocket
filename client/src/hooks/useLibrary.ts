@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type BookmarkFilters } from '../lib/api';
 import { parseRoute, type Route } from '../lib/route';
-import type { Bookmark, Collection, SortKey, Stats, Tag, ViewMode } from '../lib/types';
+import type { Bookmark, CardSize, Collection, SortKey, Stats, Tag, ViewMode } from '../lib/types';
 
-const STORAGE_KEYS = { view: 'pocket:view', sort: 'pocket:sort' } as const;
+const STORAGE_KEYS = { view: 'pocket:view', sort: 'pocket:sort', cardSize: 'pocket:card-size' } as const;
 
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
@@ -69,6 +69,8 @@ export interface Library {
   setSort: (value: SortKey) => void;
   view: ViewMode;
   setView: (value: ViewMode) => void;
+  cardSize: CardSize;
+  setCardSize: (value: CardSize) => void;
   reload: () => Promise<void>;
   reloadSidebar: () => Promise<void>;
   applyBookmark: (bookmark: Bookmark) => void;
@@ -93,6 +95,9 @@ export function useLibrary(): Library {
   );
   const [view, setViewState] = useState<ViewMode>(() =>
     readStored(STORAGE_KEYS.view, ['grid', 'list'] as const, 'grid'),
+  );
+  const [cardSize, setCardSizeState] = useState<CardSize>(() =>
+    readStored(STORAGE_KEYS.cardSize, ['small', 'medium', 'large'] as const, 'medium'),
   );
 
   const requestId = useRef(0);
@@ -170,6 +175,11 @@ export function useLibrary(): Library {
     writeStored(STORAGE_KEYS.view, value);
   }, []);
 
+  const setCardSize = useCallback((value: CardSize) => {
+    setCardSizeState(value);
+    writeStored(STORAGE_KEYS.cardSize, value);
+  }, []);
+
   /** Swaps one card in place so an edit does not reshuffle the whole grid. */
   const applyBookmark = useCallback(
     (bookmark: Bookmark) => {
@@ -213,6 +223,8 @@ export function useLibrary(): Library {
     setSort,
     view,
     setView,
+    cardSize,
+    setCardSize,
     reload,
     reloadSidebar,
     applyBookmark,

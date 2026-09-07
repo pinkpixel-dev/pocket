@@ -282,6 +282,8 @@ export default function App() {
               stats={library.stats}
               collections={library.collections}
               tags={library.tags}
+              cardSize={library.cardSize}
+              onCardSizeChange={library.setCardSize}
               onChanged={() => void library.reload()}
               onEditCollection={(collection) => {
                 setCollectionError(null);
@@ -300,7 +302,7 @@ export default function App() {
                   />
                 </div>
               ) : library.loading ? (
-                <BookmarkSkeleton view={library.view} />
+                <BookmarkSkeleton view={library.view} cardSize={library.cardSize} />
               ) : library.bookmarks.length === 0 ? (
                 <EmptyStateForRoute
                   route={library.route}
@@ -313,6 +315,7 @@ export default function App() {
                   bookmarks={library.bookmarks}
                   collections={library.collections}
                   view={library.view}
+                  cardSize={library.cardSize}
                   busyIds={busyIds}
                   {...actions}
                 />
