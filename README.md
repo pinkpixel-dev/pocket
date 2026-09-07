@@ -51,7 +51,7 @@ Two things worth knowing:
 
 Pocket sends the URL, the site name, whatever title and description it already has, about 1500 characters of the page's own text, and your existing collections and tags. Each collection goes over with a couple of the titles already filed under it, because a name on its own is not much to judge a fit by. The instruction is to reuse a collection whenever the link belongs to that subject area, and to only name a new one when nothing on the list is close. It is explicitly told not to create a narrower version of a collection you already have, because that is how you end up with "AI", "AI music" and "AI prompting" sitting next to each other. The specific bit goes in the tags instead. It sends `store: false`, so OpenAI keeps no copy.
 
-When you are filing something by hand, the collection dropdown in the add and edit dialogs has a "+ Create new collection" option, so you do not have to close the dialog to make one first.
+When you are filing something by hand, every place that asks you to pick a collection can also make one. The add and edit dialogs have a "+ Create new collection" option in the dropdown, and "Move to collection" has the same thing, so you never have to close a dialog, go make a collection, and start over.
 
 ## Keeping collections under control
 

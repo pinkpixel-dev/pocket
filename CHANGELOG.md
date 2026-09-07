@@ -2,6 +2,14 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.3.0 - September 7, 2026
+
+### 🗂️ Collections
+
+- "Move to collection" can create a collection on the spot. Pick "Create new collection...", type a name, and the bookmark moves into it without closing the dialog first
+- A name that matches an existing collection reuses it instead of failing on the duplicate
+- The move dialog no longer sends you to the sidebar when the library has no collections yet
+
 ## 1.2.0 - September 7, 2026
 
 ### 🗂️ Collections

@@ -329,11 +329,23 @@ export default function App() {
     }
   };
 
-  const moveBookmark = async (collectionId: number | null) => {
+  const moveBookmark = async (collectionId: number | null, newCollectionName?: string) => {
     if (!moveTarget) return;
     markBusy(moveTarget.id, true);
     try {
-      const { bookmark } = await api.updateBookmark(moveTarget.id, { collectionId });
+      let targetId = collectionId;
+
+      // The dialog can name a collection that does not exist yet. A name that
+      // is already taken is reused rather than colliding.
+      const name = newCollectionName?.trim();
+      if (name) {
+        const existing = library.collections.find(
+          (collection) => collection.name.toLowerCase() === name.toLowerCase(),
+        );
+        targetId = existing ? existing.id : (await api.createCollection({ name })).collection.id;
+      }
+
+      const { bookmark } = await api.updateBookmark(moveTarget.id, { collectionId: targetId });
       library.applyBookmark(bookmark);
       if (library.route.kind === 'collection' || library.route.kind === 'uncollected') await library.reload();
       toast.success('Moved.');
@@ -573,7 +585,9 @@ export default function App() {
         collections={library.collections}
         saving={moveTarget ? busyIds.has(moveTarget.id) : false}
         onClose={() => setMoveTarget(null)}
-        onSubmit={(collectionId) => void moveBookmark(collectionId)}
+        onSubmit={(collectionId, newCollectionName) =>
+          void moveBookmark(collectionId, newCollectionName)
+        }
       />
 
       <ConfirmDialog
