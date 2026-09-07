@@ -54,7 +54,17 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function LinkHealthSection({ stats, onChanged }: { stats: Stats | null; onChanged: () => void }) {
+interface LinkHealthSectionProps {
+  stats: Stats | null;
+  onChanged: () => void;
+  /**
+   * Bumped when an import leaves a check running, so the progress bar picks it
+   * up instead of waiting for the next visit to Settings.
+   */
+  watch: number;
+}
+
+function LinkHealthSection({ stats, onChanged, watch }: LinkHealthSectionProps) {
   const toast = useToast();
   const [audit, setAudit] = useState<AuditStatus | null>(null);
   const pollTimer = useRef<number | null>(null);
@@ -83,11 +93,12 @@ function LinkHealthSection({ stats, onChanged }: { stats: Stats | null; onChange
     void api.getAuditStatus().then((initial) => {
       setAudit(initial);
       if (initial.running) {
+        stopPolling();
         pollTimer.current = window.setInterval(() => void pollStatus(), 1000);
       }
     });
     return stopPolling;
-  }, [pollStatus, stopPolling]);
+  }, [pollStatus, stopPolling, watch]);
 
   const handleStart = async () => {
     try {
@@ -201,6 +212,10 @@ export function SettingsView({
   onChanged,
   onEditCollection,
 }: SettingsViewProps) {
+  // Bumped by an import that leaves a link check running, so the progress bar
+  // below starts following it straight away.
+  const [linkCheckToken, setLinkCheckToken] = useState(0);
+
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-3 py-5 sm:px-6 sm:py-6">
       <Panel title="Your account">
@@ -222,7 +237,7 @@ export function SettingsView({
           ))}
         </dl>
 
-        <LinkHealthSection stats={stats} onChanged={onChanged} />
+        <LinkHealthSection stats={stats} onChanged={onChanged} watch={linkCheckToken} />
       </Panel>
 
       <Panel title="Appearance">
@@ -298,7 +313,10 @@ export function SettingsView({
       </Panel>
 
       <Panel title="Backup and transfer">
-        <TransferPanel onImported={onChanged} />
+        <TransferPanel
+          onImported={onChanged}
+          onLinkCheckStarted={() => setLinkCheckToken((value) => value + 1)}
+        />
       </Panel>
 
       <Panel title="Collections and tags">

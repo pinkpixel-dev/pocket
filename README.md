@@ -29,6 +29,7 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
 - Mobile PWA support. Add Pocket to your phone home screen for a standalone app experience.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
+- An optional link check after an import. Everything in the file is saved first, then Pocket reads the links in the background and marks the ones that are gone, so they show up in "Needs attention" instead of disappearing on you. A file of ten thousand links still imports in seconds.
 - Bulk sorting for everything sitting in "No collection". The AI plans a short list of collections first, then files your unsorted links into it, and you review the result before anything is applied.
 - A tidy-up pass for a collection list that has gotten out of hand. It proposes merges, keeps the old names as tags, and you pick which ones to accept.
 - The same tidy-up for tags, which fold together by synonym and plural rather than by subject. Plus bulk select, merge and delete for tags you would rather sort out yourself.

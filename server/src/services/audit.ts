@@ -81,15 +81,41 @@ const markAuditRecovered = db.prepare(
     WHERE id = @id AND user_id = @userId`,
 );
 
-async function runAudit(userId: number, state: AuditState): Promise<void> {
-  const bookmarks = db
-    .prepare(
-      `SELECT id, url, preview_path, metadata_status, metadata_error
-         FROM bookmarks
-        WHERE user_id = ?
-        ORDER BY id ASC`,
-    )
-    .all(userId) as BookmarkAuditRow[];
+/**
+ * SQLite caps how many parameters one statement may carry, and an import can
+ * hand this a five figure list, so the ids go over in chunks rather than as
+ * one enormous IN clause.
+ */
+const ID_CHUNK = 500;
+
+function selectBookmarks(userId: number, ids: number[] | undefined): BookmarkAuditRow[] {
+  const columns = 'id, url, preview_path, metadata_status, metadata_error';
+
+  if (!ids) {
+    return db
+      .prepare(`SELECT ${columns} FROM bookmarks WHERE user_id = ? ORDER BY id ASC`)
+      .all(userId) as BookmarkAuditRow[];
+  }
+
+  const rows: BookmarkAuditRow[] = [];
+  for (let index = 0; index < ids.length; index += ID_CHUNK) {
+    const chunk = ids.slice(index, index + ID_CHUNK);
+    const placeholders = chunk.map(() => '?').join(',');
+    rows.push(
+      ...(db
+        .prepare(
+          `SELECT ${columns} FROM bookmarks
+            WHERE user_id = ? AND id IN (${placeholders})
+            ORDER BY id ASC`,
+        )
+        .all(userId, ...chunk) as BookmarkAuditRow[]),
+    );
+  }
+  return rows;
+}
+
+async function runAudit(userId: number, state: AuditState, ids: number[] | undefined): Promise<void> {
+  const bookmarks = selectBookmarks(userId, ids);
 
   state.total = bookmarks.length;
   state.checked = 0;
@@ -132,7 +158,15 @@ async function runAudit(userId: number, state: AuditState): Promise<void> {
   await Promise.all(workers);
 }
 
-export function startLibraryAudit(userId: number): AuditStatus {
+export interface AuditOptions {
+  /**
+   * Limits the scan to these bookmarks. An import passes the rows it just
+   * wrote, so a fresh file is checked without re-reading the whole library.
+   */
+  ids?: number[];
+}
+
+export function startLibraryAudit(userId: number, options: AuditOptions = {}): AuditStatus {
   const state = stateFor(userId);
   if (state.running) return getAuditStatus(userId);
 
@@ -142,7 +176,7 @@ export function startLibraryAudit(userId: number): AuditStatus {
   state.broken = 0;
 
   // Run in background without blocking caller
-  void runAudit(userId, state)
+  void runAudit(userId, state, options.ids)
     .catch((error: unknown) => {
       console.error('[pocket] Library audit error:', error);
     })

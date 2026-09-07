@@ -303,7 +303,7 @@ export const api = {
     const form = new FormData();
     form.append('file', file);
     form.append('fetchMetadata', String(opts.fetchMetadata !== false));
-    if (opts.skipDeadLinks) form.append('skipDeadLinks', 'true');
+    if (opts.checkLinks) form.append('checkLinks', 'true');
     if (opts.yearFilter !== undefined && opts.yearFilter !== null) {
       form.append('yearFilter', String(opts.yearFilter));
     }

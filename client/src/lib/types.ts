@@ -94,9 +94,10 @@ export interface ImportSummary {
   imported: number;
   duplicates: number;
   skipped: number;
-  deadLinks: number;
   yearFiltered: number;
   collectionsCreated: number;
+  /** How many freshly imported links a background check will read. */
+  checkingLinks: number;
   errors: string[];
 }
 
@@ -224,7 +225,7 @@ export type FolderStrategy = 'hierarchy' | 'tags_only';
 
 export interface ImportFileOptions {
   fetchMetadata?: boolean;
-  skipDeadLinks?: boolean;
+  checkLinks?: boolean;
   yearFilter?: number | null;
   yearMode?: 'exact' | 'since' | 'before';
   folderStrategy?: FolderStrategy;

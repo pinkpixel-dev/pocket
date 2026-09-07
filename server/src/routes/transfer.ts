@@ -47,7 +47,10 @@ transferRouter.post('/import', upload.single('file'), async (req, res, next) => 
     const text = file.buffer.toString('utf8');
     const trimmed = text.trimStart();
     const fetchMetadata = req.body?.fetchMetadata !== 'false';
-    const skipDeadLinks = req.body?.skipDeadLinks === 'true' || req.body?.skipDeadLinks === true;
+    // An older client still sends the retired "skipDeadLinks" name for what is
+    // now a check that runs after the import rather than a filter before it.
+    const rawCheck = req.body?.checkLinks ?? req.body?.skipDeadLinks;
+    const checkLinks = rawCheck === 'true' || rawCheck === true;
     const yearParsed = req.body?.yearFilter ? parseInt(String(req.body.yearFilter), 10) : undefined;
     const yearFilter = Number.isFinite(yearParsed) ? yearParsed : undefined;
     const yearMode =
@@ -80,7 +83,7 @@ transferRouter.post('/import', upload.single('file'), async (req, res, next) => 
 
     const summary = await importLinks(userIdOf(req), links, {
       fetchMetadata,
-      skipDeadLinks,
+      checkLinks,
       yearFilter,
       yearMode,
       folderStrategy,

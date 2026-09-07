@@ -2,6 +2,26 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.1.0 - September 7, 2026
+
+### 🐛 Fixes
+
+- Importing a bookmarks file with the link check turned on no longer comes back empty. The check used to run before anything was saved, so a large file spent minutes probing URLs while the browser waited, and when that request timed out not one bookmark had been written. Turning the option off was the only way to import at all
+- The check now runs after the import, against the links that import just added, so the file is saved in seconds no matter how big it is
+
+### 📥 Import
+
+- "Skip dead links" is now "Check links after importing". Everything in the file is saved first, then the links are read in the background and the broken ones are marked, so you review them instead of losing them silently
+- The background check reports its progress in the Link health section of Settings, with the same progress bar and cancel button the manual scan uses
+- Broken links land in "Needs attention", where selection mode can clear them out in bulk
+- When "Fetch titles and previews after importing" is already on, no second check is started. That pass reads every page anyway and marks the ones that fail
+- The import summary counts links being checked instead of links skipped
+
+### 🧹 Maintenance
+
+- `startLibraryAudit` takes an optional list of bookmark ids, so a scan can cover one import rather than the whole library
+- `services/import-link-check.test.ts` covers the import returning before any link is read, the scan being scoped to what the import wrote, and no duplicate scan when the metadata pass is running
+
 ## 2.0.0 - September 7, 2026
 
 ### 🔐 Accounts

@@ -11,11 +11,17 @@ const DOWNLOAD_LINK =
   'inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-line bg-raised px-4 ' +
   'text-ink transition-colors duration-150 hover:border-line-strong hover:bg-hover';
 
-export function TransferPanel({ onImported }: { onImported: () => void }) {
+interface TransferPanelProps {
+  onImported: () => void;
+  /** Fires when an import leaves a background link check running. */
+  onLinkCheckStarted: () => void;
+}
+
+export function TransferPanel({ onImported, onLinkCheckStarted }: TransferPanelProps) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fetchMetadata, setFetchMetadata] = useState(true);
-  const [skipDeadLinks, setSkipDeadLinks] = useState(false);
+  const [checkLinks, setCheckLinks] = useState(false);
   const [yearMode, setYearMode] = useState<'all' | 'exact' | 'since' | 'before'>('all');
   const [yearValue, setYearValue] = useState<number>(new Date().getFullYear());
   const [folderStrategy, setFolderStrategy] = useState<FolderStrategy>('hierarchy');
@@ -29,7 +35,7 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
     try {
       const result = await api.importFile(file, {
         fetchMetadata,
-        skipDeadLinks,
+        checkLinks,
         yearFilter: yearMode === 'all' ? undefined : yearValue,
         yearMode: yearMode === 'all' ? undefined : yearMode,
         folderStrategy,
@@ -38,6 +44,7 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
       setSummary(result.summary);
       toast.success(`Imported ${pluralize(result.summary.imported, 'bookmark')}.`);
       onImported();
+      if (result.summary.checkingLinks > 0) onLinkCheckStarted();
     } catch (error) {
       toast.error(error instanceof ApiError ? error.message : 'That file could not be imported.');
     } finally {
@@ -90,13 +97,15 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
           <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.875rem] text-ink">
             <input
               type="checkbox"
-              checked={skipDeadLinks}
-              onChange={(event) => setSkipDeadLinks(event.target.checked)}
+              checked={checkLinks}
+              onChange={(event) => setCheckLinks(event.target.checked)}
               className="h-4.5 w-4.5 shrink-0 accent-[var(--color-accent)]"
             />
             <span>
-              Skip dead links{' '}
-              <span className="text-ink-muted">(checks URLs and skips broken links)</span>
+              Check links after importing{' '}
+              <span className="text-ink-muted">
+                (everything is saved first, then broken links are flagged for review)
+              </span>
             </span>
           </label>
 
@@ -180,7 +189,7 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
           <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3">
             {[
               { label: 'Imported', value: summary.imported },
-              { label: 'Dead links skipped', value: summary.deadLinks },
+              { label: 'Being checked', value: summary.checkingLinks },
               { label: 'Excluded by year', value: summary.yearFiltered },
               { label: 'Already saved', value: summary.duplicates },
               { label: 'Collections added', value: summary.collectionsCreated },

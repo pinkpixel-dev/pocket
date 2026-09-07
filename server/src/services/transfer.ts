@@ -1,26 +1,27 @@
 import * as cheerio from 'cheerio';
 import { db } from '../db/index.js';
 import type { BookmarkRow } from '../lib/types.js';
-import { createBookmark, findByNormalizedUrl } from './bookmarks.js';
+import { createBookmark } from './bookmarks.js';
 import { ensureCollection, listCollections } from './collections.js';
 import { listTags, parseTagInput } from './tags.js';
 import { enqueueEnrich } from './queue.js';
-import { probeUrl } from '../lib/http.js';
-import { normalizeUrl, parseUrl } from '../lib/url.js';
+import { getAuditStatus, startLibraryAudit } from './audit.js';
 
 export interface ImportSummary {
   imported: number;
   duplicates: number;
   skipped: number;
-  deadLinks: number;
   yearFiltered: number;
   collectionsCreated: number;
+  /** How many freshly imported links a background check will read. */
+  checkingLinks: number;
   errors: string[];
 }
 
 export interface ImportOptions {
   fetchMetadata: boolean;
-  skipDeadLinks?: boolean;
+  /** Reads every imported link afterwards and flags the ones that are gone. */
+  checkLinks?: boolean;
   yearFilter?: number;
   yearMode?: 'exact' | 'since' | 'before';
   folderStrategy?: 'hierarchy' | 'tags_only';
@@ -106,13 +107,13 @@ export async function importLinks(
     imported: 0,
     duplicates: 0,
     skipped: 0,
-    deadLinks: 0,
     yearFiltered: 0,
     collectionsCreated: 0,
+    checkingLinks: 0,
     errors: [],
   };
 
-  // 1. Year Filter
+  // Year filter
   let candidates = links;
   if (options.yearFilter !== undefined && Number.isFinite(options.yearFilter)) {
     const filtered: ParsedLink[] = [];
@@ -142,58 +143,12 @@ export async function importLinks(
     candidates = filtered;
   }
 
-  // 2. Dead Links Filter (if requested)
-  if (options.skipDeadLinks && candidates.length > 0) {
-    const toProbe: ParsedLink[] = [];
-    const aliveList: ParsedLink[] = [];
-
-    // Filter duplicates and invalid URLs first so we don't probe links already stored
-    for (const link of candidates) {
-      try {
-        const parsed = parseUrl(link.url);
-        const normalized = normalizeUrl(parsed);
-        if (findByNormalizedUrl(userId, normalized)) {
-          summary.duplicates += 1;
-          continue;
-        }
-        toProbe.push(link);
-      } catch {
-        summary.skipped += 1;
-      }
-    }
-
-    const CONCURRENCY = 8;
-    let cursor = 0;
-
-    async function probeWorker(): Promise<void> {
-      while (cursor < toProbe.length) {
-        const idx = cursor++;
-        const link = toProbe[idx];
-        if (!link) break;
-
-        const probe = await probeUrl(link.url, 5000);
-        if (probe.alive) {
-          aliveList.push(link);
-        } else {
-          summary.deadLinks += 1;
-          if (summary.errors.length < 20) {
-            summary.errors.push(`${link.url}: dead link (${probe.error ?? 'unreachable'})`);
-          }
-        }
-      }
-    }
-
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, toProbe.length) }, () => probeWorker()),
-    );
-    candidates = aliveList;
-  }
-
   const collectionIds = new Map<string, number>();
   const existingNames = new Set(
     listCollections(userId).map((collection) => collection.name.toLowerCase()),
   );
   const queue: number[] = [];
+  const importedIds: number[] = [];
 
   for (const link of candidates) {
     try {
@@ -254,6 +209,7 @@ export async function importLinks(
         continue;
       }
       summary.imported += 1;
+      importedIds.push(result.bookmark.id);
       if (options.fetchMetadata) queue.push(result.bookmark.id);
     } catch (error) {
       summary.skipped += 1;
@@ -264,6 +220,27 @@ export async function importLinks(
   }
 
   for (const id of queue) enqueueEnrich(userId, id, {}, false);
+
+  /*
+   * The check runs after the rows are written, never before them. Probing an
+   * 11,000 link file first meant nothing at all was saved until every probe
+   * finished, which is far longer than any browser or proxy holds a request
+   * open, so the whole import came back empty.
+   *
+   * The metadata pass already fetches every page and marks the ones that fail,
+   * so a second scan would only double the outbound requests and race it for
+   * the status column. The scan is what provides the check when that is off.
+   */
+  if (options.checkLinks && importedIds.length > 0) {
+    if (options.fetchMetadata) {
+      // The metadata pass is already reading every one of these pages.
+      summary.checkingLinks = importedIds.length;
+    } else if (!getAuditStatus(userId).running) {
+      startLibraryAudit(userId, { ids: importedIds });
+      summary.checkingLinks = importedIds.length;
+    }
+  }
+
   return summary;
 }
 
