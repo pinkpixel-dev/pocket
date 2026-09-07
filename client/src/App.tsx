@@ -12,6 +12,7 @@ import { SelectionBar } from './components/SelectionBar';
 import { MoveDialog } from './components/MoveDialog';
 import { useToast } from './components/ui/Toaster';
 import { useLibrary } from './hooks/useLibrary';
+import { useSidebarWidth } from './hooks/useSidebarWidth';
 import { api, ApiError } from './lib/api';
 import { pluralize } from './lib/format';
 import type { Bookmark, BookmarkDraft, Collection } from './lib/types';
@@ -50,6 +51,7 @@ function useViewHeading(library: ReturnType<typeof useLibrary>): { title: string
 
 export default function App() {
   const library = useLibrary();
+  const sidebar = useSidebarWidth();
   const toast = useToast();
   const heading = useViewHeading(library);
 
@@ -456,6 +458,9 @@ export default function App() {
         tags={library.tags}
         stats={library.stats}
         open={navOpen}
+        width={sidebar.width}
+        onWidthChange={sidebar.setWidth}
+        onWidthReset={sidebar.reset}
         onClose={() => setNavOpen(false)}
         onCreateCollection={() => openCollectionEditor(null)}
         onEditCollection={openCollectionEditor}

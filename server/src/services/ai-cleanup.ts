@@ -107,6 +107,7 @@ export async function suggestCollectionCleanup(): Promise<CleanupPlan> {
     `- Aim to land near ${target} collections once your actions are applied.`,
     '- Merge collections that are the same subject area at different zoom levels. "AI music" and "AI prompting" both belong in "AI".',
     '- A merge target should be the broadest of the names involved. Use an existing name when one fits, otherwise name the shelf they share.',
+    '- A merge is also the moment to shorten a name. One or two words, 18 characters at most, and never two ideas joined by "and", "&" or "/". "UI Component libraries & templates" becomes "UI".',
     '- Convert a collection to tags when it holds one or two links and belongs to no larger subject.',
     '- Leave a collection alone when it is already broad and well filled. Say nothing about it.',
     '- Never merge unrelated subjects just to reach the number. A wrong shelf is worse than an extra one.',

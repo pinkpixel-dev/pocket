@@ -52,6 +52,7 @@ const PLAN_SYSTEM_PROMPT = [
   'You get the bookmarks that are not filed yet, plus the collections the library already has.',
   'Your job is the shortest list of collections that can hold all of them.',
   'A collection is a broad subject that still makes sense after hundreds more links land in it.',
+  'Names are short enough to read in a narrow sidebar: one or two words, never a phrase.',
   'Detail belongs in tags, never in a collection name.',
   'Answer with collection names only. Do not file anything yet.',
 ].join(' ');
@@ -64,7 +65,10 @@ const PLAN_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'A broad subject, one or two words.' },
+          name: {
+            type: 'string',
+            description: 'One or two words, 18 characters at most. No "and", no ampersand, no slash.',
+          },
           description: {
             type: 'string',
             description: 'One short line saying what belongs in it, for the filing step.',
@@ -192,6 +196,8 @@ export async function planCollections(options: { bookmarkIds?: number[] } = {}):
     '- Every collection must fit at least five of the bookmarks above.',
     '- Never include two collections where one is a narrower version of the other. "AI", not "AI music" and "AI prompting".',
     '- Never include a collection named after a single bookmark, a brand, or one product.',
+    '- Keep every name to one or two words and 18 characters at most. It has to fit a narrow sidebar.',
+    '- No name may join two ideas with "and", "&", "/" or a comma. "UI", not "UI component libraries & templates". The rest becomes tags.',
     '- No vague names: nothing called Other, Misc, Various, Assorted or Bookmarks.',
     '- Leave links that fit nothing out. They stay unfiled, which is fine.',
   ].join('\n');

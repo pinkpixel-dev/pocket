@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { Menu } from './ui/Menu';
+import { SidebarResizer } from './SidebarResizer';
 import { routeHref, routesMatch, type Route } from '../lib/route';
 import type { Collection, Stats, Tag } from '../lib/types';
 
@@ -25,6 +26,10 @@ interface SidebarProps {
   tags: Tag[];
   stats: Stats | null;
   open: boolean;
+  /** Applies from the large breakpoint up, where the sidebar is a column. */
+  width: number;
+  onWidthChange: (width: number) => void;
+  onWidthReset: () => void;
   onClose: () => void;
   onCreateCollection: () => void;
   onEditCollection: (collection: Collection) => void;
@@ -71,7 +76,9 @@ function NavLink({ target, current, icon, label, count, swatch, trailing, onNavi
             icon
           )}
         </span>
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="min-w-0 flex-1 truncate" title={label}>
+          {label}
+        </span>
         {count !== undefined && count > 0 ? (
           <span className="shrink-0 font-mono text-[0.6875rem] text-ink-faint tabular-nums">{count}</span>
         ) : null}
@@ -134,6 +141,9 @@ export function Sidebar({
   tags,
   stats,
   open,
+  width,
+  onWidthChange,
+  onWidthReset,
   onClose,
   onCreateCollection,
   onEditCollection,
@@ -155,13 +165,15 @@ export function Sidebar({
 
       <nav
         aria-label="Library"
+        style={{ '--sidebar-width': `${width}px` } as React.CSSProperties}
         className={clsx(
           'fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-line bg-canvas',
           'transition-transform duration-200 ease-(--ease-out-soft)',
-          'lg:sticky lg:top-0 lg:h-dvh lg:w-64 lg:translate-x-0 lg:transition-none',
+          'lg:sticky lg:top-0 lg:h-dvh lg:w-(--sidebar-width) lg:translate-x-0 lg:transition-none',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
+        <SidebarResizer width={width} onResize={onWidthChange} onReset={onWidthReset} />
         <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-4">
           <a href="#/" onClick={onClose} className="flex items-center gap-2.5">
             <img

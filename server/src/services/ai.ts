@@ -60,6 +60,7 @@ const SYSTEM_PROMPT = [
   'Titles are plain and specific. Descriptions are one or two sentences, factual, no sales language.',
   'Tags are lowercase, one or two words each, and reusable across many bookmarks. Prefer a tag the library already has over a new synonym.',
   'Collections are broad subject areas, not topics. What makes a link specific belongs in its tags.',
+  'Collection names are one or two words and fit a narrow sidebar. Never join two ideas with "and", "&" or "/".',
   'A library with a collection per link is not organized, it is a list with extra steps.',
 ].join(' ');
 
@@ -104,6 +105,7 @@ function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boo
         '- Never propose a narrower version of a collection that already exists. A link about AI music goes in "AI" with the tag music, not in a new "AI music".',
         '- When you are torn between an existing collection and a new one, use the existing one.',
         '- Only name a new collection when nothing on the list is even close, and name it broadly enough that dozens of future links will also belong there. Never name it after this one page, a brand, or a single product.',
+        '- Keep a new name to one or two words and 18 characters at most. "UI", not "UI component libraries and templates". Everything the name leaves out goes into the tags.',
         '- Return an empty string when nothing fits and no broad name is warranted. Staying unfiled with good tags is a fine outcome.',
       ].join('\n')
     : [

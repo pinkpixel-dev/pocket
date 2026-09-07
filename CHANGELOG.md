@@ -2,6 +2,19 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.4.0 - September 7, 2026
+
+### 🧭 Sidebar
+
+- The sidebar can be resized. Drag its right edge, or focus it and use the arrow keys, Home and End. Double click or press Enter to go back to the default width
+- The width is remembered in this browser, between 200px and 460px, and only applies on wide screens where the sidebar is a column rather than a drawer
+- Collection and tag names that are too long to fit now show in full on hover
+
+### 🤖 AI naming
+
+- Collection names the AI proposes are now capped at one or two words and 18 characters, and it can no longer join two ideas with "and", "&" or "/". "UI Component libraries & templates" becomes "UI", with the rest carried as tags
+- The rule applies to all three paths: filing a single bookmark, planning a sorting run, and naming a merge target during a tidy-up
+
 ## 1.3.0 - September 7, 2026
 
 ### 🗂️ Collections
