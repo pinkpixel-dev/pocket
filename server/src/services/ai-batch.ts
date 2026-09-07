@@ -2,7 +2,7 @@ import { db } from '../db/index.js';
 import type { BookmarkRow } from '../lib/types.js';
 import { AiRequestError, callAiJson } from './ai-client.js';
 import { ensureCollection, listCollections } from './collections.js';
-import { ensureTagIds, normalizeTagName } from './tags.js';
+import { ensureTagIds, listTags, normalizeTagName } from './tags.js';
 
 export { AiRequestError as AiBatchError };
 
@@ -46,6 +46,8 @@ export interface ApplyCategoryAssignment {
 /** How many bookmarks one planning prompt looks at, and one filing call handles. */
 const PLAN_SAMPLE = 250;
 const ASSIGN_LIMIT = 50;
+/** How many existing tags the filing pass is shown, busiest first. */
+const TAG_SAMPLE = 80;
 
 const PLAN_SYSTEM_PROMPT = [
   "You design the shelf layout for one person's private bookmark library.",
@@ -89,6 +91,7 @@ const ASSIGN_SYSTEM_PROMPT = [
   'You may not invent, split, extend or narrow a collection name.',
   'What makes a link specific goes into its tags instead: a link about AI music is filed under AI and tagged music.',
   'Tags are lowercase, one or two words, and reusable across many bookmarks.',
+  'Reuse the tags the library already has. A new tag nobody else will ever share is worth less than an existing one that nearly fits.',
 ].join(' ');
 
 const ASSIGN_SCHEMA = {
@@ -156,6 +159,13 @@ function describeBookmark(row: BookmarkRow, withId: boolean): string {
   parts.push(`   Site: ${row.site_name || 'unknown'}`);
   if (row.description) parts.push(`   Excerpt: ${row.description.slice(0, 140)}`);
   return parts.join('\n');
+}
+
+/** The tags worth offering back to the model, busiest first. */
+function describeTags(): string {
+  const tags = listTags().slice(0, TAG_SAMPLE);
+  if (tags.length === 0) return '(none yet)';
+  return tags.map((tag) => `${tag.name} (${tag.bookmarkCount})`).join(', ');
 }
 
 function describeExisting(): string {
@@ -282,6 +292,9 @@ export async function suggestBatchCollections(
     'Collections you may use, and nothing else:',
     allowedNames.map((name) => `- ${name}`).join('\n'),
     '',
+    'Tags this library already uses, most used first:',
+    describeTags(),
+    '',
     `File these ${candidates.length} bookmarks:`,
     candidates.map((row) => describeBookmark(row, true)).join('\n\n'),
     '',
@@ -289,6 +302,8 @@ export async function suggestBatchCollections(
     '- Copy a collection name from the list above, character for character.',
     '- Return an empty string when none of them is a real fit. Do not force one.',
     '- Give 1 to 3 tags. Put the specific subject there, not in the collection name.',
+    '- Take tags from the list above whenever one fits, spelled exactly as it appears. Only invent a tag when nothing on the list comes close.',
+    '- Never invent a near-synonym of a tag that already exists, and never a plural of a singular already in use.',
   ].join('\n');
 
   const parsed = await callAiJson<{

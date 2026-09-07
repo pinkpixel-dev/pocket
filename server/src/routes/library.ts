@@ -10,7 +10,7 @@ import {
   mergeCollections,
   updateCollection,
 } from '../services/collections.js';
-import { deleteTag, listTags, renameTag } from '../services/tags.js';
+import { deleteTag, deleteTags, listTags, mergeTags, renameTag } from '../services/tags.js';
 import { countBookmarks } from '../services/bookmarks.js';
 import { db } from '../db/index.js';
 import { queueSize } from '../services/queue.js';
@@ -22,7 +22,7 @@ import {
   planCollections,
   suggestBatchCollections,
 } from '../services/ai-batch.js';
-import { suggestCollectionCleanup } from '../services/ai-cleanup.js';
+import { suggestCollectionCleanup, suggestTagCleanup } from '../services/ai-cleanup.js';
 
 export const libraryRouter = Router();
 
@@ -145,6 +145,17 @@ libraryRouter.post('/ai/suggest-collection-cleanup', async (_req, res, next) => 
   }
 });
 
+libraryRouter.post('/ai/suggest-tag-cleanup', async (_req, res, next) => {
+  try {
+    if (!isAiConfigured()) {
+      throw badRequest('Add an OpenAI API key in Settings first.');
+    }
+    res.json(await suggestTagCleanup());
+  } catch (error) {
+    next(error);
+  }
+});
+
 libraryRouter.post('/ai/apply-categories', (req, res) => {
   const schema = z.object({
     assignments: z.array(
@@ -167,6 +178,23 @@ libraryRouter.patch('/tags/:id', (req, res) => {
   const id = idParam.parse(req.params.id);
   const { name } = parse(z.object({ name: z.string().min(1).max(60) }), req.body);
   res.json({ tag: renameTag(id, name) });
+});
+
+libraryRouter.post('/tags/merge', (req, res) => {
+  const schema = z.object({
+    sourceIds: z.array(z.number().int().positive()).min(1),
+    target: z.string().min(1).max(60),
+  });
+  const data = parse(schema, req.body);
+  res.json(mergeTags(data.sourceIds, data.target));
+});
+
+libraryRouter.post('/tags/bulk-delete', (req, res) => {
+  const schema = z.object({
+    ids: z.array(z.number().int().positive()).min(1).max(1000),
+  });
+  const data = parse(schema, req.body);
+  res.json({ deleted: deleteTags(data.ids) });
 });
 
 libraryRouter.delete('/tags/:id', (req, res) => {

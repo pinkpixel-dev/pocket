@@ -2,6 +2,20 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.5.0 - September 7, 2026
+
+### 🏷️ Tags
+
+- The AI now sees the tags your library already uses, busiest first, whenever it files a bookmark. It is told to reuse them and never to invent a synonym or a plural of a tag that already exists. The batch filing pass was not being shown the tag list at all, which is where most of the duplication came from
+- New "Tidy up with AI" action above the tag list. It folds synonyms, plurals and rephrasings into the tag that is already used most, and flags tags that group nothing. Merges start ticked, deletions do not
+- Tags can be selected in bulk and merged into one name, or deleted together
+- Merging into a name the library does not have yet creates it. A bookmark that already carried the target tag does not end up with it twice
+- The single-bookmark AI pass now sees 80 tags instead of 40, ordered by use rather than arbitrarily
+
+### 🛠️ API
+
+- Add `POST /api/tags/merge`, `POST /api/tags/bulk-delete` and `POST /api/ai/suggest-tag-cleanup`
+
 ## 1.4.0 - September 7, 2026
 
 ### 🧭 Sidebar

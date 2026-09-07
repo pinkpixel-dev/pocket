@@ -2,6 +2,7 @@ import type {
   AiBatchResult,
   CleanupPlan,
   CollectionPlan,
+  TagCleanupPlan,
   AiSettings,
   ApplyCategoryAssignment,
   AuditStatus,
@@ -195,6 +196,18 @@ export const api = {
     return call(`/api/tags/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
   },
 
+  /** Folds tags into one name, creating it when the library does not have it. */
+  mergeTags(sourceIds: number[], target: string): Promise<{ merged: number; movedLinks: number }> {
+    return call('/api/tags/merge', {
+      method: 'POST',
+      body: JSON.stringify({ sourceIds, target }),
+    });
+  },
+
+  bulkDeleteTags(ids: number[]): Promise<{ deleted: number }> {
+    return call('/api/tags/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+  },
+
   deleteTag(id: number): Promise<void> {
     return call(`/api/tags/${id}`, { method: 'DELETE' });
   },
@@ -279,6 +292,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(options ?? {}),
     });
+  },
+
+  /** Reviews the tag vocabulary and proposes merges for synonyms and plurals. */
+  suggestTagCleanup(): Promise<TagCleanupPlan> {
+    return call('/api/ai/suggest-tag-cleanup', { method: 'POST' });
   },
 
   /** Reviews the whole collection list and proposes merges and tag conversions. */

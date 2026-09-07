@@ -58,7 +58,8 @@ const SYSTEM_PROMPT = [
   'You are given a saved page and the collections and tags that library already uses.',
   'Answer only from what the page actually says. Never invent a fact about it.',
   'Titles are plain and specific. Descriptions are one or two sentences, factual, no sales language.',
-  'Tags are lowercase, one or two words each, and reusable across many bookmarks. Prefer a tag the library already has over a new synonym.',
+  'Tags are lowercase, one or two words each, and reusable across many bookmarks.',
+  'Reuse a tag the library already has instead of inventing a synonym, a plural, or a slightly different phrasing of it. A tag used once is a tag that failed.',
   'Collections are broad subject areas, not topics. What makes a link specific belongs in its tags.',
   'Collection names are one or two words and fit a narrow sidebar. Never join two ideas with "and", "&" or "/".',
   'A library with a collection per link is not organized, it is a list with extra steps.',
@@ -96,7 +97,9 @@ function describeCollections(): string {
 }
 
 function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boolean): string {
-  const tags = listTags().slice(0, 40);
+  // listTags is ordered by use, so this is the part of the vocabulary that is
+  // actually shared rather than 300 one-off tags in alphabetical order.
+  const tags = listTags().slice(0, 80);
 
   const collectionRule = canCreateCollection
     ? [
@@ -127,8 +130,8 @@ function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boo
     'Collections already in this library',
     describeCollections(),
     '',
-    'Tags already in this library',
-    tags.length ? tags.map((tag) => tag.name).join(', ') : '(none yet)',
+    'Tags already in this library, most used first',
+    tags.length ? tags.map((tag) => `${tag.name} (${tag.bookmarkCount})`).join(', ') : '(none yet)',
     '',
     collectionRule,
   ].join('\n');

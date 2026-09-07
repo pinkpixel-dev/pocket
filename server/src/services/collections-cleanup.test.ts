@@ -22,6 +22,7 @@ const {
   getUncollectedDomainStats,
 } = await import('./collections.js');
 const { createBookmark, getBookmark } = await import('./bookmarks.js');
+const { listTags, mergeTags, deleteTags } = await import('./tags.js');
 const { applyBatchCategorization } = await import('./ai-batch.js');
 
 test.after(() => {
@@ -238,4 +239,47 @@ test('applyBatchCategorization creates collections, assigns bookmarks, and links
   assert.equal(col.name, 'Tech News');
   assert.ok(updated.tags.includes('startups'));
   assert.ok(updated.tags.includes('tech'));
+});
+
+test('mergeTags folds synonyms into one tag without duplicating links', () => {
+  const first = createBookmark({
+    url: 'https://llm.example/one',
+    title: 'LLM one',
+    tags: ['llm', 'llms'],
+    metadataStatus: 'manual',
+  }).bookmark;
+  const second = createBookmark({
+    url: 'https://llm.example/two',
+    title: 'LLM two',
+    tags: ['large language models'],
+    metadataStatus: 'manual',
+  }).bookmark;
+
+  const names = new Map(listTags().map((tag) => [tag.name, tag.id]));
+  const sources = ['llms', 'large language models'].map((name) => names.get(name)!);
+
+  const res = mergeTags(sources, 'llm');
+
+  assert.equal(res.merged, 2);
+  // The first bookmark already carried "llm", so its "llms" link is dropped
+  // rather than moved, and it must not end up with the tag twice.
+  assert.deepEqual(getBookmark(first.id)!.tags, ['llm']);
+  assert.deepEqual(getBookmark(second.id)!.tags, ['llm']);
+  assert.ok(!listTags().some((tag) => tag.name === 'llms'));
+});
+
+test('deleteTags removes tags and leaves their bookmarks alone', () => {
+  const bookmark = createBookmark({
+    url: 'https://junk.example',
+    title: 'Junk',
+    tags: ['keeper', 'one-off'],
+    metadataStatus: 'manual',
+  }).bookmark;
+
+  const junkId = listTags().find((tag) => tag.name === 'one-off')!.id;
+  assert.equal(deleteTags([junkId]), 1);
+
+  const updated = getBookmark(bookmark.id)!;
+  assert.deepEqual(updated.tags, ['keeper']);
+  assert.equal(updated.title, 'Junk');
 });

@@ -177,6 +177,25 @@ export interface CleanupPlan {
   singletonCount: number;
 }
 
+export interface TagCleanupSource {
+  id: number;
+  name: string;
+  bookmarkCount: number;
+}
+
+export interface TagCleanupAction {
+  kind: 'merge' | 'delete';
+  target: string;
+  sources: TagCleanupSource[];
+  reason: string;
+}
+
+export interface TagCleanupPlan {
+  actions: TagCleanupAction[];
+  tagCount: number;
+  singletonCount: number;
+}
+
 export interface ApplyCategoryAssignment {
   bookmarkId: number;
   collectionName?: string;

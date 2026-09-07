@@ -91,6 +91,54 @@ export function renameTag(id: number, rawName: string): Tag {
   return listTags().find((tag) => tag.id === finalId) ?? { id: finalId, name, bookmarkCount: 0 };
 }
 
+/**
+ * Folds several tags into one name. A rename already merges on a clash, but a
+ * bulk tidy-up needs one transaction rather than a rename per tag, and the
+ * target may be a name the library does not have yet.
+ */
+export function mergeTags(
+  sourceIds: number[],
+  rawTarget: string,
+): { merged: number; movedLinks: number } {
+  const target = normalizeTagName(rawTarget);
+  if (!target) throw badRequest('A tag needs a name.');
+
+  return db.transaction(() => {
+    const targetId = ensureTagIds([target])[0];
+    if (targetId === undefined) throw badRequest('That tag could not be created.');
+
+    const move = db.prepare('UPDATE OR IGNORE bookmark_tags SET tag_id = ? WHERE tag_id = ?');
+    const dropLinks = db.prepare('DELETE FROM bookmark_tags WHERE tag_id = ?');
+    const dropTag = db.prepare('DELETE FROM tags WHERE id = ?');
+
+    let merged = 0;
+    let movedLinks = 0;
+
+    for (const id of sourceIds) {
+      if (id === targetId) continue;
+      movedLinks += move.run(targetId, id).changes;
+      // A bookmark that already carried the target tag leaves a link behind,
+      // which has to go before the tag row itself can.
+      dropLinks.run(id);
+      merged += dropTag.run(id).changes;
+    }
+
+    return { merged, movedLinks };
+  })();
+}
+
+/** Removes tags outright. The bookmarks keep everything else about them. */
+export function deleteTags(ids: number[]): number {
+  if (ids.length === 0) return 0;
+
+  return db.transaction(() => {
+    const stmt = db.prepare('DELETE FROM tags WHERE id = ?');
+    let deleted = 0;
+    for (const id of ids) deleted += stmt.run(id).changes;
+    return deleted;
+  })();
+}
+
 export function deleteTag(id: number): void {
   const result = db.prepare('DELETE FROM tags WHERE id = ?').run(id);
   if (result.changes === 0) throw notFound('That tag no longer exists.');

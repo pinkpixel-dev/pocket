@@ -29,6 +29,7 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
 - Bulk sorting for everything sitting in "No collection". The AI plans a short list of collections first, then files your unsorted links into it, and you review the result before anything is applied.
 - A tidy-up pass for a collection list that has gotten out of hand. It proposes merges, keeps the old names as tags, and you pick which ones to accept.
+- The same tidy-up for tags, which fold together by synonym and plural rather than by subject. Plus bulk select, merge and delete for tags you would rather sort out yourself.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
 
 ## What it does not do
@@ -59,6 +60,10 @@ When you are filing something by hand, every place that asks you to pick a colle
 A bookmark library goes wrong in a predictable way: you end up with 90 collections, most of them holding a single link, and a pile of stuff in "No collection" that never got filed at all. Pocket has two tools for that, both in Settings under Collections and tags, and both need an OpenAI key.
 
 **Sorting what is unfiled.** Open the AI sorting dialog from the uncollected triage section. It works in two passes. First it reads everything sitting in "No collection" and proposes a short list of collections, roughly one per twelve links. You get that list as chips and can drop any you do not want. Then it files every unsorted bookmark into that list and nothing else. It cannot invent a new name halfway through, which is the whole point. Anything that fits none of the collections stays unfiled with its tags, which is a better outcome than a shelf built for one link.
+
+**Tidying tags.** The tag list drifts the same way, just differently: not sub-topics but synonyms, plurals and slightly different phrasings of one idea. "llm", "llms" and "large language models" all end up sitting there. Press "Tidy up with AI" above the tag list and it folds those into whichever one you already use most. Tags that group nothing get flagged for removal, though those start unticked, since deleting a tag loses the label rather than moving it. You can also tick tags yourself and merge or delete them in bulk without the AI.
+
+The AI is now also shown your existing tags whenever it files anything, ordered by how much you use them, and told to reuse one instead of inventing a near-synonym. That is the part that stops the list growing in the first place.
 
 **Tidying what already exists.** Press "Tidy up with AI" above your collection list. It reads every collection with its size and a few of the titles in it, then proposes merges: "AI music" and "AI prompting" into "AI", "Creative licensing" and "Open source licensing" into "Licensing". Collections holding one or two links that belong to no larger subject get offered as tag conversions instead. Every merge keeps the old collection name as a tag, so nothing about a bookmark is lost when its shelf disappears. You untick anything you disagree with before applying.
 
