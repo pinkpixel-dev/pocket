@@ -8,8 +8,9 @@ import {
   setPinned,
   updateBookmark,
 } from '../services/bookmarks.js';
-import { enqueueEnrich } from '../services/queue.js';
+import { enqueueAiFill, enqueueEnrich } from '../services/queue.js';
 import { enrichBookmark } from '../services/enrich.js';
+import { isAiConfigured } from '../services/settings.js';
 import { badRequest } from '../lib/errors.js';
 import type { SortKey } from '../lib/types.js';
 
@@ -113,6 +114,19 @@ bookmarksRouter.post('/:id/pin', (req, res) => {
 bookmarksRouter.post('/:id/refresh', async (req, res) => {
   const id = idParam.parse(req.params.id);
   getBookmark(id);
-  const bookmark = await enrichBookmark(id, { overwriteText: true });
+  const { bookmark } = await enrichBookmark(id, { overwriteText: true });
   res.json({ bookmark: bookmark ?? getBookmark(id) });
+});
+
+/**
+ * Queued rather than awaited: the model can think for a while, and the card
+ * already knows how to show a pending state and poll for the result.
+ */
+bookmarksRouter.post('/:id/ai', (req, res) => {
+  const id = idParam.parse(req.params.id);
+  const bookmark = getBookmark(id);
+  if (!isAiConfigured()) throw badRequest('Add an OpenAI key in Settings first.');
+
+  enqueueAiFill(id);
+  res.status(202).json({ bookmark: { ...bookmark, aiStatus: 'pending', aiError: null } });
 });

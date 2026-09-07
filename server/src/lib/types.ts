@@ -1,5 +1,11 @@
 export type MetadataStatus = 'pending' | 'ok' | 'partial' | 'failed' | 'manual';
 
+/**
+ * Where a bookmark is in the optional AI pass. 'none' is the resting state for
+ * everything when no key is configured, so the feature stays invisible.
+ */
+export type AiStatus = 'none' | 'pending' | 'ok' | 'skipped' | 'failed';
+
 export interface BookmarkRow {
   id: number;
   url: string;
@@ -14,6 +20,9 @@ export interface BookmarkRow {
   metadata_status: MetadataStatus;
   metadata_error: string | null;
   metadata_fetched_at: string | null;
+  ai_status: AiStatus;
+  ai_error: string | null;
+  ai_applied_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -33,6 +42,9 @@ export interface Bookmark {
   metadataStatus: MetadataStatus;
   metadataError: string | null;
   metadataFetchedAt: string | null;
+  aiStatus: AiStatus;
+  aiError: string | null;
+  aiAppliedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

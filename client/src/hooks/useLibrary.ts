@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, type BookmarkFilters } from '../lib/api';
 import { parseRoute, type Route } from '../lib/route';
-import type { Bookmark, CardSize, Collection, SortKey, Stats, Tag, ViewMode } from '../lib/types';
+import type { AiSettings, Bookmark, CardSize, Collection, SortKey, Stats, Tag, ViewMode } from '../lib/types';
 
 const STORAGE_KEYS = { view: 'pocket:view', sort: 'pocket:sort', cardSize: 'pocket:card-size' } as const;
 
@@ -61,6 +61,9 @@ export interface Library {
   collections: Collection[];
   tags: Tag[];
   stats: Stats | null;
+  /** Null until the first load. `configured` false hides every AI control. */
+  aiSettings: AiSettings | null;
+  setAiSettings: (settings: AiSettings) => void;
   loading: boolean;
   loadError: string | null;
   search: string;
@@ -85,6 +88,7 @@ export function useLibrary(): Library {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -157,8 +161,18 @@ export function useLibrary(): Library {
     void reloadSidebar();
   }, [reloadSidebar]);
 
-  // Metadata arrives after the save, so poll while anything is still working.
-  const hasPending = bookmarks.some((bookmark) => bookmark.metadataStatus === 'pending');
+  // Settings change rarely, and the panel hands back the new copy itself.
+  useEffect(() => {
+    api
+      .settings()
+      .then((result) => setAiSettings(result.ai))
+      .catch(() => setAiSettings(null));
+  }, []);
+
+  // Metadata and the AI pass both land after the save, so poll while either works.
+  const hasPending = bookmarks.some(
+    (bookmark) => bookmark.metadataStatus === 'pending' || bookmark.aiStatus === 'pending',
+  );
   useEffect(() => {
     if (!hasPending) return;
     const timer = window.setInterval(() => void loadBookmarks(false), 2500);
@@ -215,6 +229,8 @@ export function useLibrary(): Library {
     collections,
     tags,
     stats,
+    aiSettings,
+    setAiSettings,
     loading,
     loadError,
     search,

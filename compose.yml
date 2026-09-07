@@ -15,6 +15,10 @@ services:
       TZ: ${TZ:-UTC}
       # Set to false only on a network where you trust every reachable host.
       POCKET_BLOCK_PRIVATE_ADDRESSES: 'true'
+      # Optional. Set a key here instead of in Settings and it stays out of the
+      # database and your backups. Pocket then refuses to let the browser
+      # change it. Leave it out entirely to add the key from Settings instead.
+      # POCKET_OPENAI_API_KEY: ${POCKET_OPENAI_API_KEY:-}
     # If your NAS share is owned by a different account, set the ids here and
     # make sure ./data is writable by them.
     # user: '1000:1000'

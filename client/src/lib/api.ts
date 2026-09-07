@@ -1,4 +1,4 @@
-import type { Bookmark, Collection, ImportSummary, SortKey, Stats, Tag } from './types';
+import type { AiSettings, Bookmark, Collection, ImportSummary, SortKey, Stats, Tag } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -101,6 +101,25 @@ export const api = {
 
   refreshBookmark(id: number): Promise<{ bookmark: Bookmark }> {
     return call(`/api/bookmarks/${id}/refresh`, { method: 'POST' });
+  },
+
+  /** Queues the AI pass. The returned bookmark is already marked pending. */
+  fillWithAi(id: number): Promise<{ bookmark: Bookmark }> {
+    return call(`/api/bookmarks/${id}/ai`, { method: 'POST' });
+  },
+
+  settings(): Promise<{ ai: AiSettings }> {
+    return call('/api/settings');
+  },
+
+  updateAiSettings(input: {
+    apiKey?: string;
+    model?: string;
+    reasoningEffort?: string;
+    autoRun?: boolean;
+    createCollections?: boolean;
+  }): Promise<{ ai: AiSettings }> {
+    return call('/api/settings/ai', { method: 'PATCH', body: JSON.stringify(input) });
   },
 
   listCollections(): Promise<{ collections: Collection[] }> {

@@ -8,6 +8,7 @@ import { closeDatabase } from './db/index.js';
 import { HttpError } from './lib/errors.js';
 import { bookmarksRouter } from './routes/bookmarks.js';
 import { libraryRouter } from './routes/library.js';
+import { settingsRouter } from './routes/settings.js';
 import { transferRouter } from './routes/transfer.js';
 import { resumePendingJobs } from './services/queue.js';
 
@@ -26,6 +27,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/bookmarks', bookmarksRouter);
 app.use('/api', libraryRouter);
+app.use('/api', settingsRouter);
 app.use('/api', transferRouter);
 
 /**

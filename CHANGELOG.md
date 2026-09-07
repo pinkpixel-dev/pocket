@@ -2,6 +2,38 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 0.3.0 - September 7, 2026
+
+### ✨ Filling in links with AI
+
+- Optional OpenAI connection that fills in whatever a page did not give you: the title, a description, a few tags, and the collection the link belongs in
+- It runs after the normal preview fetch, not instead of it, so the model only ever sees a bookmark that already has whatever the page could supply. It writes into empty fields only and never touches something you typed
+- Paste an API key in Settings and it is stored in your database, or set `POCKET_OPENAI_API_KEY` and the browser cannot change it
+- Twelve models to pick from, with prices shown. The default is `gpt-5.4-nano`
+- Thinking effort is selectable per model, and an effort a model does not support falls back instead of failing
+- "Fill in with AI" on any card or list row, for links you saved before you set a key. The item is greyed out when there is nothing left to fill
+- Two toggles: whether new links are filled in automatically, and whether it may create collections it does not already have
+- It reuses one of your collections when a link genuinely belongs there, and makes a new one when nothing fits. The prompt carries your collection names plus a couple of the titles already filed under each, since a name on its own is thin evidence for judging a fit
+- When it is torn between an existing collection and a new one, it makes the new one. A collection full of loosely related things is worth less than one more collection
+- Imported bookmarks are skipped on purpose. A browser export can be thousands of links and each one would be a paid request
+- Cards show a "filling in" marker while a job runs and an "AI failed" marker with the reason when one does not
+- With no key set anywhere, none of this appears. No menu item, no card marker, no requests
+
+### 📁 Collections
+
+- "+ Create new collection" in the collection dropdown when adding or editing a link, so naming one no longer means closing the dialog first. It is created when you save, and a name that already exists is reused rather than duplicated
+- Rename, recolour, and delete a collection from its row in the sidebar, next to where you actually click it. The same controls remain in Settings
+- Deleting the collection you are currently looking at returns you to All bookmarks instead of leaving you in an empty view
+
+### 🔒 Security
+
+- The OpenAI request goes through the same address guard as every other outbound fetch, on its own connection pool with a longer timeout since a reasoning model takes a while to answer
+- `store: false` is sent on every request, so OpenAI keeps no copy of the conversation
+
+### 🗄️ Database
+
+- Migration 2 adds a `settings` table and three `ai_*` columns to `bookmarks`. It is additive and applies on first start
+
 ## 0.2.0 - September 7, 2026
 
 ### 🖼️ Card sizes

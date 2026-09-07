@@ -38,6 +38,15 @@ export const config = {
     blockPrivateAddresses: envBool('POCKET_BLOCK_PRIVATE_ADDRESSES', true),
   },
   maxUploadBytes: envInt('POCKET_MAX_UPLOAD_BYTES', 32 * 1024 * 1024),
+  openai: {
+    /** Set this and the browser can no longer change the key. Optional. */
+    apiKey: process.env.POCKET_OPENAI_API_KEY?.trim() || '',
+    baseUrl: (process.env.POCKET_OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/+$/, ''),
+    /** Reasoning models think before answering, so this is not the fetch budget. */
+    timeoutMs: envInt('POCKET_OPENAI_TIMEOUT_MS', 60_000),
+    /** How much page text goes into the prompt, in characters. */
+    maxExcerptChars: envInt('POCKET_AI_EXCERPT_CHARS', 1_500),
+  },
 } as const;
 
 export function ensureDataDirs(): void {

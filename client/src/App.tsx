@@ -27,7 +27,7 @@ function useViewHeading(library: ReturnType<typeof useLibrary>): { title: string
       case 'pinned':
         return { title: 'Pinned', subtitle: counted };
       case 'settings':
-        return { title: 'Settings', subtitle: 'Backups, collections and tags' };
+        return { title: 'Settings', subtitle: 'AI, backups, collections and tags' };
       case 'uncollected':
         return { title: 'No collection', subtitle: counted };
       case 'untagged':
@@ -68,6 +68,8 @@ export default function App() {
     collection: null,
   });
   const [collectionError, setCollectionError] = useState<string | null>(null);
+  const [collectionDeleteTarget, setCollectionDeleteTarget] = useState<Collection | null>(null);
+  const [deletingCollection, setDeletingCollection] = useState(false);
 
   const markBusy = useCallback((id: number, busy: boolean) => {
     setBusyIds((current) => {
@@ -102,17 +104,43 @@ export default function App() {
     return () => window.removeEventListener('keydown', handler);
   }, [openCreate]);
 
+  /**
+   * The dialog can name a collection that does not exist yet. It is created
+   * here, on save, so cancelling out of the dialog leaves nothing behind. A
+   * name that already exists is reused rather than colliding. `created` is the
+   * id only when this call made it, so a failed save can take it back out.
+   */
+  const resolveCollectionId = async (
+    draft: BookmarkDraft,
+  ): Promise<{ collectionId: number | null; created: number | null }> => {
+    const name = draft.newCollectionName?.trim();
+    if (!name) return { collectionId: draft.collectionId, created: null };
+
+    const existing = library.collections.find(
+      (collection) => collection.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (existing) return { collectionId: existing.id, created: null };
+
+    const { collection } = await api.createCollection({ name });
+    return { collectionId: collection.id, created: collection.id };
+  };
+
   const submitBookmark = async (draft: BookmarkDraft) => {
     setSaving(true);
     setFormError(null);
+    let createdCollection: number | null = null;
 
     try {
+      const resolved = await resolveCollectionId(draft);
+      const collectionId = resolved.collectionId;
+      createdCollection = resolved.created;
+
       if (formState.mode === 'edit' && formState.bookmark) {
         const { bookmark } = await api.updateBookmark(formState.bookmark.id, {
           url: draft.url,
           title: draft.title,
           description: draft.description,
-          collectionId: draft.collectionId,
+          collectionId,
           tags: draft.tags,
           isPinned: draft.isPinned,
         });
@@ -123,7 +151,7 @@ export default function App() {
           url: draft.url,
           title: draft.title || undefined,
           description: draft.description || undefined,
-          collectionId: draft.collectionId,
+          collectionId,
           tags: draft.tags,
           isPinned: draft.isPinned,
         });
@@ -131,6 +159,7 @@ export default function App() {
         toast.success('Saved. Fetching the preview now.');
       }
       setFormState((current) => ({ ...current, open: false }));
+      createdCollection = null;
     } catch (error) {
       if (error instanceof ApiError) {
         const duplicate = error.duplicateBookmark;
@@ -148,6 +177,12 @@ export default function App() {
         setFormError('That could not be saved.');
       }
     } finally {
+      // The bookmark never landed, so a collection made only for it should not
+      // survive. Duplicate URLs make this a normal path, not a rare one.
+      if (createdCollection !== null) {
+        await api.deleteCollection(createdCollection).catch(() => {});
+        await library.reloadSidebar();
+      }
       setSaving(false);
     }
   };
@@ -179,6 +214,16 @@ export default function App() {
       toast.error(error instanceof ApiError ? error.message : 'The preview could not be refreshed.');
     } finally {
       markBusy(bookmark.id, false);
+    }
+  };
+
+  const fillWithAi = async (bookmark: Bookmark) => {
+    // The card shows its own pending state, so this only reports a refusal.
+    try {
+      const result = await api.fillWithAi(bookmark.id);
+      library.applyBookmark(result.bookmark);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'That could not be sent to the AI.');
     }
   };
 
@@ -233,6 +278,30 @@ export default function App() {
     }
   };
 
+  const openCollectionEditor = (collection: Collection | null) => {
+    setCollectionError(null);
+    setCollectionDialog({ open: true, collection });
+  };
+
+  const confirmDeleteCollection = async () => {
+    if (!collectionDeleteTarget) return;
+    setDeletingCollection(true);
+    try {
+      await api.deleteCollection(collectionDeleteTarget.id);
+      // Standing inside the collection you just deleted would show an empty view.
+      if (library.route.kind === 'collection' && library.route.id === collectionDeleteTarget.id) {
+        window.location.hash = '#/';
+      }
+      await library.reload();
+      toast.success('Collection deleted. Its bookmarks were kept.');
+      setCollectionDeleteTarget(null);
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'That collection could not be deleted.');
+    } finally {
+      setDeletingCollection(false);
+    }
+  };
+
   const actions = {
     onEdit: (bookmark: Bookmark) => {
       setFormError(null);
@@ -242,6 +311,9 @@ export default function App() {
     onTogglePin: (bookmark: Bookmark) => void togglePin(bookmark),
     onRefresh: (bookmark: Bookmark) => void refreshBookmark(bookmark),
     onDelete: setDeleteTarget,
+    onFillWithAi: library.aiSettings?.configured
+      ? (bookmark: Bookmark) => void fillWithAi(bookmark)
+      : undefined,
   };
 
   const isSettings = library.route.kind === 'settings';
@@ -255,10 +327,9 @@ export default function App() {
         stats={library.stats}
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        onCreateCollection={() => {
-          setCollectionError(null);
-          setCollectionDialog({ open: true, collection: null });
-        }}
+        onCreateCollection={() => openCollectionEditor(null)}
+        onEditCollection={openCollectionEditor}
+        onDeleteCollection={setCollectionDeleteTarget}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -283,12 +354,11 @@ export default function App() {
               collections={library.collections}
               tags={library.tags}
               cardSize={library.cardSize}
+              aiSettings={library.aiSettings}
               onCardSizeChange={library.setCardSize}
+              onAiSettingsChange={library.setAiSettings}
               onChanged={() => void library.reload()}
-              onEditCollection={(collection) => {
-                setCollectionError(null);
-                setCollectionDialog({ open: true, collection });
-              }}
+              onEditCollection={openCollectionEditor}
             />
           ) : (
             <div className="px-3 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-5">
@@ -355,6 +425,16 @@ export default function App() {
         busy={deleteTarget ? busyIds.has(deleteTarget.id) : false}
         onConfirm={() => void confirmDelete()}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={collectionDeleteTarget !== null}
+        title="Delete collection?"
+        message={`"${collectionDeleteTarget?.name}" will be removed. Its ${pluralize(collectionDeleteTarget?.bookmarkCount ?? 0, 'bookmark')} will stay in your library.`}
+        confirmLabel="Delete"
+        busy={deletingCollection}
+        onConfirm={() => void confirmDeleteCollection()}
+        onClose={() => setCollectionDeleteTarget(null)}
       />
 
       <CollectionDialog

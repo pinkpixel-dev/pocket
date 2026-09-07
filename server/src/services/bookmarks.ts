@@ -31,6 +31,9 @@ export function mapBookmark(row: BookmarkRow): Bookmark {
     metadataStatus: row.metadata_status,
     metadataError: row.metadata_error,
     metadataFetchedAt: row.metadata_fetched_at,
+    aiStatus: row.ai_status,
+    aiError: row.ai_error,
+    aiAppliedAt: row.ai_applied_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

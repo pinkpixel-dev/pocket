@@ -1,4 +1,6 @@
 export type MetadataStatus = 'pending' | 'ok' | 'partial' | 'failed' | 'manual';
+export type AiStatus = 'none' | 'pending' | 'ok' | 'skipped' | 'failed';
+export type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface Bookmark {
   id: number;
@@ -15,6 +17,9 @@ export interface Bookmark {
   metadataStatus: MetadataStatus;
   metadataError: string | null;
   metadataFetchedAt: string | null;
+  aiStatus: AiStatus;
+  aiError: string | null;
+  aiAppliedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +51,24 @@ export interface Stats {
   pendingJobs: number;
 }
 
+export interface AiModel {
+  id: string;
+  note: string;
+  efforts: ReasoningEffort[];
+}
+
+export interface AiSettings {
+  /** False means no key anywhere, and the whole feature stays hidden. */
+  configured: boolean;
+  keySource: 'env' | 'settings' | 'none';
+  keyHint: string | null;
+  model: string;
+  reasoningEffort: ReasoningEffort;
+  autoRun: boolean;
+  createCollections: boolean;
+  models: AiModel[];
+}
+
 export interface ImportSummary {
   imported: number;
   duplicates: number;
@@ -63,6 +86,12 @@ export interface BookmarkDraft {
   title: string;
   description: string;
   collectionId: number | null;
+  /**
+   * Null unless the user picked "Create new collection" in the dialog. The
+   * collection is made on save, so backing out of the dialog leaves nothing
+   * behind.
+   */
+  newCollectionName: string | null;
   tags: string[];
   isPinned: boolean;
 }

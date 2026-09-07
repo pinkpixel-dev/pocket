@@ -58,6 +58,23 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    id: 2,
+    name: 'ai-assist',
+    up: (db) => {
+      db.exec(`
+        CREATE TABLE settings (
+          key        TEXT PRIMARY KEY,
+          value      TEXT NOT NULL,
+          updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        ALTER TABLE bookmarks ADD COLUMN ai_status     TEXT NOT NULL DEFAULT 'none';
+        ALTER TABLE bookmarks ADD COLUMN ai_error      TEXT;
+        ALTER TABLE bookmarks ADD COLUMN ai_applied_at TEXT;
+      `);
+    },
+  },
 ];
 
 export function migrate(db: Database.Database): void {

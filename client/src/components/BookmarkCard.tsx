@@ -8,6 +8,7 @@ import {
   Pin,
   PinOff,
   RefreshCw,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { Menu } from './ui/Menu';
@@ -21,6 +22,8 @@ export interface BookmarkActions {
   onTogglePin: (bookmark: Bookmark) => void;
   onRefresh: (bookmark: Bookmark) => void;
   onDelete: (bookmark: Bookmark) => void;
+  /** Undefined when no OpenAI key is set, which removes the menu item. */
+  onFillWithAi?: (bookmark: Bookmark) => void;
 }
 
 interface CardProps extends BookmarkActions {
@@ -71,9 +74,28 @@ const SIZE_STYLES = {
   },
 } as const;
 
+/** True once there is nothing left for the AI pass to write into. */
+export function isFullyFilled(bookmark: Bookmark): boolean {
+  return Boolean(
+    bookmark.title && bookmark.description && bookmark.collectionId !== null && bookmark.tags.length > 0,
+  );
+}
+
 export function buildMenuItems(bookmark: Bookmark, actions: BookmarkActions) {
+  const filling = bookmark.aiStatus === 'pending';
+
   return [
     { label: 'Edit details', icon: <Pencil size={15} />, onSelect: () => actions.onEdit(bookmark) },
+    ...(actions.onFillWithAi
+      ? [
+          {
+            label: filling ? 'Filling in…' : isFullyFilled(bookmark) ? 'Nothing left to fill in' : 'Fill in with AI',
+            icon: <Sparkles size={15} />,
+            disabled: filling || isFullyFilled(bookmark),
+            onSelect: () => actions.onFillWithAi?.(bookmark),
+          },
+        ]
+      : []),
     { label: 'Move to collection', icon: <FolderInput size={15} />, onSelect: () => actions.onMove(bookmark) },
     {
       label: bookmark.isPinned ? 'Unpin' : 'Pin to top',
@@ -176,6 +198,17 @@ export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: C
             <span className="inline-flex items-center gap-1 text-danger" title={bookmark.metadataError ?? ''}>
               <AlertTriangle size={11} aria-hidden />
               no preview
+            </span>
+          ) : null}
+          {bookmark.aiStatus === 'pending' ? (
+            <span className="inline-flex items-center gap-1 text-accent">
+              <Sparkles size={11} className="animate-pulse" aria-hidden />
+              filling in
+            </span>
+          ) : bookmark.aiStatus === 'failed' ? (
+            <span className="inline-flex items-center gap-1 text-danger" title={bookmark.aiError ?? ''}>
+              <AlertTriangle size={11} aria-hidden />
+              AI failed
             </span>
           ) : null}
         </div>

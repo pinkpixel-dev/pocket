@@ -1,15 +1,18 @@
 import { TransferPanel } from './settings/TransferPanel';
 import { OrganizePanel } from './settings/OrganizePanel';
+import { AiPanel } from './settings/AiPanel';
 import { SelectField } from './ui/Field';
 import { pluralize } from '../lib/format';
-import type { CardSize, Collection, Stats, Tag } from '../lib/types';
+import type { AiSettings, CardSize, Collection, Stats, Tag } from '../lib/types';
 
 interface SettingsViewProps {
   stats: Stats | null;
   collections: Collection[];
   tags: Tag[];
   cardSize: CardSize;
+  aiSettings: AiSettings | null;
   onCardSizeChange: (value: CardSize) => void;
+  onAiSettingsChange: (settings: AiSettings) => void;
   onChanged: () => void;
   onEditCollection: (collection: Collection) => void;
 }
@@ -34,7 +37,9 @@ export function SettingsView({
   collections,
   tags,
   cardSize,
+  aiSettings,
   onCardSizeChange,
+  onAiSettingsChange,
   onChanged,
   onEditCollection,
 }: SettingsViewProps) {
@@ -76,6 +81,10 @@ export function SettingsView({
             </option>
           ))}
         </SelectField>
+      </Panel>
+
+      <Panel title="Filling in links with AI">
+        <AiPanel settings={aiSettings} onChanged={onAiSettingsChange} />
       </Panel>
 
       <Panel title="Backup and transfer">

@@ -152,6 +152,64 @@ export function fetchHtml(url: string, signal?: AbortSignal): Promise<FetchResul
   });
 }
 
+/**
+ * A reasoning model can think for a while before the first byte arrives, so
+ * the API call gets its own agent with a much longer patience than a metadata
+ * fetch. The address guard is the same one, because an API base URL is still
+ * a URL somebody can point wherever they like.
+ */
+const apiAgent = new Agent({
+  connect: { lookup: guardedLookup, timeout: 8_000 },
+  headersTimeout: config.openai.timeoutMs,
+  bodyTimeout: config.openai.timeoutMs,
+});
+
+export interface JsonResponse {
+  status: number;
+  body: unknown;
+}
+
+/** POSTs JSON and reads JSON back. Redirects are refused rather than followed. */
+export async function postJson(
+  url: string,
+  payload: unknown,
+  headers: Record<string, string>,
+): Promise<JsonResponse> {
+  const target = new URL(url);
+  assertFetchable(target);
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.openai.timeoutMs);
+
+  try {
+    const response = await request(target.href, {
+      dispatcher: apiAgent,
+      method: 'POST',
+      signal: controller.signal,
+      headers: { ...headers, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await response.body.text();
+    let body: unknown = text;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      // Left as text so the caller can put something useful in the error.
+    }
+    return { status: response.statusCode, body };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new FetchError(`${target.hostname} did not answer within ${config.openai.timeoutMs / 1000}s.`);
+    }
+    if (error instanceof BlockedAddressError) throw new FetchError(error.message, error);
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new FetchError(`Could not reach ${target.hostname}: ${reason}`, error);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function fetchImage(url: string, signal?: AbortSignal): Promise<FetchResult> {
   return safeFetch(url, {
     maxBytes: config.fetch.maxImageBytes,

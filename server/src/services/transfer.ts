@@ -127,7 +127,7 @@ export function importLinks(links: ParsedLink[], options: { fetchMetadata: boole
     }
   }
 
-  for (const id of queue) enqueueEnrich(id);
+  for (const id of queue) enqueueEnrich(id, {}, false);
   return summary;
 }
 

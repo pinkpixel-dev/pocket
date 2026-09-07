@@ -9,6 +9,15 @@ export interface EnrichOptions {
   overwriteText?: boolean;
 }
 
+export interface EnrichResult {
+  bookmark: Bookmark | null;
+  /**
+   * The page text the fetch already parsed. Handed back so the AI pass can
+   * reuse it instead of downloading the same page a second time.
+   */
+  excerpt: string;
+}
+
 async function firstUsableImage(
   candidates: string[],
   kind: 'preview' | 'favicon',
@@ -45,9 +54,9 @@ const markFailed = db.prepare(
     WHERE id = @id`,
 );
 
-export async function enrichBookmark(id: number, options: EnrichOptions = {}): Promise<Bookmark | null> {
+export async function enrichBookmark(id: number, options: EnrichOptions = {}): Promise<EnrichResult> {
   const row = getBookmarkRow(id);
-  if (!row) return null;
+  if (!row) return { bookmark: null, excerpt: '' };
 
   let metadata;
   try {
@@ -58,14 +67,14 @@ export async function enrichBookmark(id: number, options: EnrichOptions = {}): P
         ? error.message
         : 'The page could not be read.';
     markFailed.run({ id, error: message.slice(0, 400) });
-    return getBookmark(id);
+    return { bookmark: getBookmark(id), excerpt: '' };
   }
 
   const previewPath = await firstUsableImage(metadata.imageCandidates, 'preview');
   const faviconPath = await firstUsableImage(metadata.faviconCandidates, 'favicon');
 
   const stillThere = getBookmarkRow(id);
-  if (!stillThere) return null;
+  if (!stillThere) return { bookmark: null, excerpt: metadata.excerpt };
 
   const title = options.overwriteText || !stillThere.title ? metadata.title || stillThere.title : stillThere.title;
   const description =
@@ -104,5 +113,5 @@ export async function enrichBookmark(id: number, options: EnrichOptions = {}): P
     await releaseIfUnused(stillThere.favicon_path, id);
   }
 
-  return getBookmark(id);
+  return { bookmark: getBookmark(id), excerpt: metadata.excerpt };
 }

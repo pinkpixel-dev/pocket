@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
 import { SelectField, TextArea, TextField } from './ui/Field';
@@ -27,9 +27,13 @@ const EMPTY: BookmarkDraft = {
   title: '',
   description: '',
   collectionId: null,
+  newCollectionName: null,
   tags: [],
   isPinned: false,
 };
+
+/** Sentinel for the extra <option>. No real collection can have this id. */
+const NEW_COLLECTION = '__new';
 
 export function BookmarkFormDialog({
   open,
@@ -55,6 +59,7 @@ export function BookmarkFormDialog({
         title: bookmark.title,
         description: bookmark.description,
         collectionId: bookmark.collectionId,
+        newCollectionName: null,
         tags: bookmark.tags,
         isPinned: bookmark.isPinned,
       });
@@ -68,6 +73,20 @@ export function BookmarkFormDialog({
 
   const update = <K extends keyof BookmarkDraft>(key: K, value: BookmarkDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
+
+  const creatingCollection = draft.newCollectionName !== null;
+
+  const chooseCollection = (value: string) => {
+    if (value === NEW_COLLECTION) {
+      setDraft((current) => ({ ...current, collectionId: null, newCollectionName: '' }));
+      return;
+    }
+    setDraft((current) => ({
+      ...current,
+      collectionId: value ? Number(value) : null,
+      newCollectionName: null,
+    }));
+  };
 
   const submit = () => {
     if (!draft.url.trim()) return;
@@ -148,18 +167,56 @@ export function BookmarkFormDialog({
               onChange={(event) => update('description', event.target.value)}
             />
 
-            <SelectField
-              label="Collection"
-              value={draft.collectionId === null ? '' : String(draft.collectionId)}
-              onChange={(event) => update('collectionId', event.target.value ? Number(event.target.value) : null)}
-            >
-              <option value="">No collection</option>
-              {collections.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {collection.name}
-                </option>
-              ))}
-            </SelectField>
+            <div className="flex flex-col gap-2">
+              <SelectField
+                label="Collection"
+                value={
+                  creatingCollection
+                    ? NEW_COLLECTION
+                    : draft.collectionId === null
+                      ? ''
+                      : String(draft.collectionId)
+                }
+                onChange={(event) => chooseCollection(event.target.value)}
+              >
+                <option value="">No collection</option>
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {collection.name}
+                  </option>
+                ))}
+                <option value={NEW_COLLECTION}>+ Create new collection</option>
+              </SelectField>
+
+              {creatingCollection ? (
+                <div className="flex items-end gap-2">
+                  <div className="min-w-0 flex-1">
+                    <TextField
+                      label="New collection name"
+                      autoFocus
+                      maxLength={80}
+                      placeholder="Models, Recipes, Reading..."
+                      value={draft.newCollectionName ?? ''}
+                      hint="Created when you save. Leaving it blank saves the link with no collection."
+                      onChange={(event) => update('newCollectionName', event.target.value)}
+                      onKeyDown={(event) => {
+                        // Enter inside a sub-field should not submit the whole form.
+                        if (event.key === 'Enter') event.preventDefault();
+                      }}
+                    />
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Cancel creating a collection"
+                    className="mb-7"
+                    onClick={() => chooseCollection('')}
+                  >
+                    <X size={16} aria-hidden />
+                  </Button>
+                </div>
+              ) : null}
+            </div>
 
             <TagInput value={draft.tags} onChange={(value) => update('tags', value)} suggestions={tags} />
 

@@ -1,4 +1,5 @@
 import * as cheerio from 'cheerio';
+import { config } from '../config.js';
 import { fetchHtml, FetchError } from '../lib/http.js';
 import { domainOf } from '../lib/url.js';
 
@@ -10,6 +11,12 @@ export interface PageMetadata {
   /** Best candidates first; the caller downloads until one works. */
   imageCandidates: string[];
   faviconCandidates: string[];
+  /**
+   * A short slice of the page's own words. Free to produce because the HTML
+   * is already parsed, and it is what the AI pass reads when a site ships no
+   * description of its own.
+   */
+  excerpt: string;
 }
 
 function clean(value: string | undefined | null, limit: number): string {
@@ -28,6 +35,18 @@ function absolute(candidate: string | undefined, base: string): string | null {
   } catch {
     return null;
   }
+}
+
+/** Strips the furniture, then takes the first readable run of body text. */
+function extractExcerpt($: cheerio.CheerioAPI): string {
+  const body = $('body').clone();
+  body.find('script, style, noscript, template, svg, nav, header, footer, aside, form').remove();
+
+  const main = body.find('article').first();
+  const source = main.length > 0 ? main : body.find('main').first();
+  const text = (source.length > 0 ? source : body).text();
+
+  return text.replace(/\s+/g, ' ').trim().slice(0, config.openai.maxExcerptChars);
 }
 
 /** Pulls the first URL out of a srcset, which is the largest in most templates. */
@@ -94,6 +113,7 @@ export function parseMetadata(html: string, pageUrl: string): PageMetadata {
     siteName,
     imageCandidates: dedupe(rawImages),
     faviconCandidates: dedupe(rawFavicons),
+    excerpt: extractExcerpt($),
   };
 }
 
@@ -130,6 +150,7 @@ export async function fetchMetadata(url: string): Promise<PageMetadata> {
       siteName: domainOf(result.finalUrl),
       imageCandidates: result.contentType.startsWith('image/') ? [result.finalUrl] : [],
       faviconCandidates: [new URL('/favicon.ico', result.finalUrl).href],
+      excerpt: '',
     };
   }
 
