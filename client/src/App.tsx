@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BookmarkX, Inbox, Pin, SearchX, TriangleAlert } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
@@ -92,6 +92,26 @@ export default function App() {
   useEffect(() => {
     setNavOpen(false);
   }, [library.route]);
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const { hasMore, loadMore, bookmarks } = library;
+
+  // Watching a marker below the grid pulls in the next page before it is
+  // reached. The observer is rebuilt after each page so a short page, which
+  // leaves the marker on screen and fires no new event, still loads the rest.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) loadMore();
+      },
+      { rootMargin: '800px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadMore, bookmarks.length]);
 
   const openCreate = useCallback(() => {
     setFormError(null);
@@ -408,14 +428,31 @@ export default function App() {
                   onClearSearch={() => library.setSearch('')}
                 />
               ) : (
-                <BookmarkGrid
-                  bookmarks={library.bookmarks}
-                  collections={library.collections}
-                  view={library.view}
-                  cardSize={library.cardSize}
-                  busyIds={busyIds}
-                  {...actions}
-                />
+                <>
+                  <BookmarkGrid
+                    bookmarks={library.bookmarks}
+                    collections={library.collections}
+                    view={library.view}
+                    cardSize={library.cardSize}
+                    busyIds={busyIds}
+                    {...actions}
+                  />
+                  <div ref={sentinelRef} aria-hidden className="h-px" />
+                  {library.hasMore ? (
+                    <div className="flex justify-center py-6">
+                      <button
+                        type="button"
+                        onClick={library.loadMore}
+                        disabled={library.loadingMore}
+                        className="h-11 rounded-full border border-line bg-surface px-5 text-[0.8125rem] text-ink-muted transition-colors hover:border-line-strong hover:text-ink disabled:opacity-60"
+                      >
+                        {library.loadingMore
+                          ? 'Loading more...'
+                          : `Load more (${library.bookmarks.length} of ${library.total})`}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           )}

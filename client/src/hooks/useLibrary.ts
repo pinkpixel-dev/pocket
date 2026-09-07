@@ -11,6 +11,10 @@ const STORAGE_KEYS = {
   accent: ACCENT_STORAGE_KEY,
 } as const;
 
+/** Bookmarks fetched per request. The server caps a single page at 500. */
+const PAGE_SIZE = 100;
+const MAX_PAGE = 500;
+
 function readStored<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
     const value = window.localStorage.getItem(key);
@@ -73,6 +77,11 @@ export interface Library {
   aiSettings: AiSettings | null;
   setAiSettings: (settings: AiSettings) => void;
   loading: boolean;
+  /** True while an extra page is being appended to the list. */
+  loadingMore: boolean;
+  /** False once every bookmark matching the current filters is loaded. */
+  hasMore: boolean;
+  loadMore: () => void;
   loadError: string | null;
   search: string;
   setSearch: (value: string) => void;
@@ -100,6 +109,7 @@ export function useLibrary(): Library {
   const [stats, setStats] = useState<Stats | null>(null);
   const [aiSettings, setAiSettings] = useState<AiSettings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
@@ -123,6 +133,19 @@ export function useLibrary(): Library {
   });
 
   const requestId = useRef(0);
+  // Reads inside callbacks that must stay stable across renders.
+  const bookmarksRef = useRef<Bookmark[]>([]);
+  const totalRef = useRef(0);
+  const loadingMoreRef = useRef(false);
+  const filtersRef = useRef<BookmarkFilters | null>(null);
+
+  useEffect(() => {
+    bookmarksRef.current = bookmarks;
+  }, [bookmarks]);
+
+  useEffect(() => {
+    totalRef.current = total;
+  }, [total]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search), 250);
@@ -134,16 +157,30 @@ export function useLibrary(): Library {
     [route, debouncedSearch, sort],
   );
 
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
   const loadBookmarks = useCallback(
     async (showSpinner: boolean) => {
       const id = ++requestId.current;
       if (showSpinner) setLoading(true);
 
+      // A refresh keeps everything already scrolled into view, so it asks for
+      // as much of the head of the list as one request is allowed to return.
+      const loaded = showSpinner ? 0 : bookmarksRef.current.length;
+      const limit = Math.min(Math.max(loaded, PAGE_SIZE), MAX_PAGE);
+
       try {
-        const page = await api.listBookmarks(filters);
+        const page = await api.listBookmarks(filters, { limit });
         // A slower earlier request must not overwrite a newer result.
         if (id !== requestId.current) return;
-        setBookmarks(page.items);
+        setBookmarks((current) => {
+          if (showSpinner) return page.items;
+          const refreshed = new Set(page.items.map((item) => item.id));
+          const tail = current.slice(page.items.length).filter((item) => !refreshed.has(item.id));
+          return [...page.items, ...tail];
+        });
         setTotal(page.total);
         setLoadError(null);
       } catch (error) {
@@ -155,6 +192,34 @@ export function useLibrary(): Library {
     },
     [filters],
   );
+
+  /** Appends the next page. Safe to call repeatedly; extra calls are ignored. */
+  const loadMore = useCallback(() => {
+    const offset = bookmarksRef.current.length;
+    if (loadingMoreRef.current || offset === 0 || offset >= totalRef.current) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+
+    api
+      .listBookmarks(filters, { limit: PAGE_SIZE, offset })
+      .then((page) => {
+        // The filters changed while this was in flight, so the page is stale.
+        if (filtersRef.current !== filters) return;
+        setBookmarks((current) => {
+          const seen = new Set(current.map((item) => item.id));
+          return [...current, ...page.items.filter((item) => !seen.has(item.id))];
+        });
+        setTotal(page.total);
+      })
+      .catch(() => {
+        // Scrolling past the sentinel again retries; the loaded list stays put.
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, [filters]);
 
   const reloadSidebar = useCallback(async () => {
     try {
@@ -261,6 +326,9 @@ export function useLibrary(): Library {
     aiSettings,
     setAiSettings,
     loading,
+    loadingMore,
+    hasMore: bookmarks.length < total,
+    loadMore,
     loadError,
     search,
     setSearch,

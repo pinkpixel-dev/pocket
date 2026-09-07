@@ -70,7 +70,10 @@ export interface BookmarkFilters {
 }
 
 export const api = {
-  listBookmarks(filters: BookmarkFilters): Promise<{ items: Bookmark[]; total: number }> {
+  listBookmarks(
+    filters: BookmarkFilters,
+    page?: { limit?: number; offset?: number },
+  ): Promise<{ items: Bookmark[]; total: number }> {
     const params = new URLSearchParams();
     if (filters.q) params.set('q', filters.q);
     if (filters.collection !== undefined) params.set('collection', String(filters.collection));
@@ -78,6 +81,8 @@ export const api = {
     if (filters.pinned) params.set('pinned', '1');
     if (filters.status) params.set('status', filters.status);
     if (filters.sort) params.set('sort', filters.sort);
+    if (page?.limit !== undefined) params.set('limit', String(page.limit));
+    if (page?.offset) params.set('offset', String(page.offset));
     const query = params.toString();
     return call(`/api/bookmarks${query ? `?${query}` : ''}`);
   },
