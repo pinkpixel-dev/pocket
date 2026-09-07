@@ -97,6 +97,9 @@ export interface Library {
   reloadSidebar: () => Promise<void>;
   applyBookmark: (bookmark: Bookmark) => void;
   removeBookmark: (id: number) => void;
+  removeBookmarks: (ids: readonly number[]) => void;
+  /** Every id matching the current filters, including pages not loaded yet. */
+  collectAllIds: () => Promise<number[]>;
 }
 
 export function useLibrary(): Library {
@@ -312,6 +315,35 @@ export function useLibrary(): Library {
     [reloadSidebar],
   );
 
+  const removeBookmarks = useCallback(
+    (ids: readonly number[]) => {
+      const gone = new Set(ids);
+      setBookmarks((current) => current.filter((item) => !gone.has(item.id)));
+      setTotal((current) => Math.max(0, current - gone.size));
+      void reloadSidebar();
+    },
+    [reloadSidebar],
+  );
+
+  /**
+   * Selecting everything has to cover the whole filtered set, not just the
+   * pages already on screen, so this walks the list server side and keeps only
+   * the ids.
+   */
+  const collectAllIds = useCallback(async (): Promise<number[]> => {
+    const ids: number[] = [];
+    let offset = 0;
+
+    for (;;) {
+      const page = await api.listBookmarks(filters, { limit: MAX_PAGE, offset });
+      ids.push(...page.items.map((item) => item.id));
+      offset += page.items.length;
+      if (page.items.length === 0 || offset >= page.total) break;
+    }
+
+    return ids;
+  }, [filters]);
+
   const reload = useCallback(async () => {
     await Promise.all([loadBookmarks(false), reloadSidebar()]);
   }, [loadBookmarks, reloadSidebar]);
@@ -344,5 +376,7 @@ export function useLibrary(): Library {
     reloadSidebar,
     applyBookmark,
     removeBookmark,
+    removeBookmarks,
+    collectAllIds,
   };
 }

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import clsx from 'clsx';
-import { LayoutGrid, List, Menu as MenuIcon, Plus, Search, X } from 'lucide-react';
+import { CheckSquare, LayoutGrid, List, Menu as MenuIcon, Plus, Search, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import type { SortKey, ViewMode } from '../lib/types';
 
@@ -16,6 +16,11 @@ interface TopBarProps {
   onOpenNav: () => void;
   onAdd: () => void;
   showControls: boolean;
+  /** Hidden when the view has nothing to select. */
+  canSelect: boolean;
+  onStartSelecting: () => void;
+  /** Rendered inside the sticky header, under the controls. */
+  banner?: ReactNode;
 }
 
 const SORT_LABELS: Array<{ value: SortKey; label: string }> = [
@@ -38,6 +43,9 @@ export function TopBar({
   onOpenNav,
   onAdd,
   showControls,
+  canSelect,
+  onStartSelecting,
+  banner,
 }: TopBarProps) {
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -130,6 +138,18 @@ export function TopBar({
             ))}
           </select>
 
+          {canSelect ? (
+            <button
+              type="button"
+              onClick={onStartSelecting}
+              title="Select bookmarks"
+              className="order-4 grid h-11 w-11 shrink-0 place-items-center rounded-lg border border-line bg-surface text-ink-muted transition-colors hover:border-line-strong hover:text-ink focus:border-accent focus:outline-none sm:order-none"
+            >
+              <CheckSquare size={16} aria-hidden />
+              <span className="sr-only">Select bookmarks</span>
+            </button>
+          ) : null}
+
           <div
             role="group"
             aria-label="Layout"
@@ -161,6 +181,8 @@ export function TopBar({
           </div>
         </div>
       ) : null}
+
+      {banner}
     </header>
   );
 }

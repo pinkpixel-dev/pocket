@@ -276,6 +276,36 @@ export async function deleteBookmark(id: number): Promise<void> {
   })();
 }
 
+/**
+ * Deletes many bookmarks in one pass, which is what tidying up after an import
+ * needs. The rows go first so the shared-image check below sees only what
+ * survived; releasing per row before the delete would keep every file that two
+ * doomed bookmarks happened to share.
+ */
+export async function deleteBookmarks(ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0;
+
+  const rows = ids
+    .map((id) => getBookmarkRow(id))
+    .filter((row): row is BookmarkRow => row !== undefined);
+
+  const deleted = db.transaction(() => {
+    const stmt = db.prepare('DELETE FROM bookmarks WHERE id = ?');
+    let count = 0;
+    for (const row of rows) count += stmt.run(row.id).changes;
+    pruneOrphanTags();
+    return count;
+  })();
+
+  for (const row of rows) {
+    await releaseImage(row.preview_path, row.id);
+    await releaseImage(row.favicon_path, row.id);
+    await releaseImage(row.cover_path, row.id);
+  }
+
+  return deleted;
+}
+
 export function setPinned(id: number, isPinned: boolean): Bookmark {
   const result = db
     .prepare("UPDATE bookmarks SET is_pinned = ?, updated_at = datetime('now') WHERE id = ?")

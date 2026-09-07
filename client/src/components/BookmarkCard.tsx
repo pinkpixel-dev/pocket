@@ -13,6 +13,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Menu } from './ui/Menu';
+import { SelectMark, SelectOverlay } from './SelectOverlay';
 import { Favicon, Preview } from './Preview';
 import { displayUrl, relativeTime } from '../lib/format';
 import type { Bookmark, CardSize, Collection } from '../lib/types';
@@ -29,7 +30,14 @@ export interface BookmarkActions {
   onFillWithAi?: (bookmark: Bookmark) => void;
 }
 
-interface CardProps extends BookmarkActions {
+export interface SelectionProps {
+  /** True while the view is in selection mode, which replaces tap-to-open. */
+  selectable?: boolean;
+  selected?: boolean;
+  onToggleSelect?: (id: number) => void;
+}
+
+interface CardProps extends BookmarkActions, SelectionProps {
   bookmark: Bookmark;
   collection: Collection | undefined;
   size: CardSize;
@@ -124,7 +132,16 @@ const TRIGGER_CLASS =
   'grid place-items-center rounded-lg border border-line bg-canvas/85 text-ink-muted ' +
   'backdrop-blur-sm transition-colors hover:bg-hover hover:text-ink';
 
-export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: CardProps) {
+export function BookmarkCard({
+  bookmark,
+  collection,
+  size,
+  busy,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+  ...actions
+}: CardProps) {
   const title = bookmark.title || displayUrl(bookmark.url, 60);
   // A cover the user chose answers the complaint, so the flag stops being useful.
   const failed = bookmark.metadataStatus === 'failed' && !bookmark.coverUrl;
@@ -137,9 +154,17 @@ export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: C
         'group relative flex flex-col overflow-hidden rounded-(--radius-card) border border-line bg-surface',
         'transition-colors duration-200 ease-(--ease-out-soft) hover:border-line-strong',
         'focus-within:border-accent',
+        selectable && selected && 'border-accent',
         busy && 'opacity-60',
       )}
     >
+      {selectable ? (
+        <SelectOverlay
+          selected={selected}
+          label={`Select ${title}`}
+          onToggle={() => onToggleSelect?.(bookmark.id)}
+        />
+      ) : null}
       <a
         href={bookmark.url}
         target="_blank"
@@ -151,29 +176,42 @@ export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: C
       </a>
 
       {/* Controls sit above the link target so opening a card is never ambiguous. */}
-      <div className={clsx('absolute flex items-center', style.controls)}>
-        {bookmark.isPinned ? (
+      {/* The tick is not clickable itself; taps fall through to the overlay. */}
+      <div
+        className={clsx(
+          'absolute z-30 flex items-center',
+          selectable && 'pointer-events-none',
+          style.controls,
+        )}
+      >
+        {selectable ? (
+          <SelectMark selected={selected} size={style.icon} />
+        ) : null}
+
+        {!selectable && bookmark.isPinned ? (
           <span className={clsx(triggerClass, 'text-accent')} title="Pinned">
             <Pin size={style.icon - 1} aria-hidden />
             <span className="sr-only">Pinned</span>
           </span>
         ) : null}
 
-        <Menu
-          label={`Actions for ${title}`}
-          items={buildMenuItems(bookmark, actions)}
-          trigger={(triggerProps) => (
-            <button
-              type="button"
-              {...triggerProps}
-              aria-haspopup="menu"
-              aria-label={`Actions for ${title}`}
-              className={triggerClass}
-            >
-              <MoreVertical size={style.icon} aria-hidden />
-            </button>
-          )}
-        />
+        {selectable ? null : (
+          <Menu
+            label={`Actions for ${title}`}
+            items={buildMenuItems(bookmark, actions)}
+            trigger={(triggerProps) => (
+              <button
+                type="button"
+                {...triggerProps}
+                aria-haspopup="menu"
+                aria-label={`Actions for ${title}`}
+                className={triggerClass}
+              >
+                <MoreVertical size={style.icon} aria-hidden />
+              </button>
+            )}
+          />
+        )}
       </div>
 
       <div className={clsx('flex min-w-0 flex-1 flex-col', style.body)}>

@@ -1,29 +1,53 @@
 import clsx from 'clsx';
 import { AlertTriangle, MoreVertical, Pin } from 'lucide-react';
 import { Menu } from './ui/Menu';
+import { SelectMark, SelectOverlay } from './SelectOverlay';
 import { Preview } from './Preview';
-import { buildMenuItems, type BookmarkActions } from './BookmarkCard';
+import { buildMenuItems, type BookmarkActions, type SelectionProps } from './BookmarkCard';
 import { displayUrl, relativeTime } from '../lib/format';
 import type { Bookmark, Collection } from '../lib/types';
 
-interface RowProps extends BookmarkActions {
+interface RowProps extends BookmarkActions, SelectionProps {
   bookmark: Bookmark;
   collection: Collection | undefined;
   busy?: boolean;
 }
 
 /** The compact view, for scanning or tidying a lot of links at once. */
-export function BookmarkRow({ bookmark, collection, busy, ...actions }: RowProps) {
+export function BookmarkRow({
+  bookmark,
+  collection,
+  busy,
+  selectable = false,
+  selected = false,
+  onToggleSelect,
+  ...actions
+}: RowProps) {
   const title = bookmark.title || displayUrl(bookmark.url, 70);
 
   return (
     <article
       className={clsx(
-        'group flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2.5',
+        'group relative flex items-center gap-3 rounded-xl border border-transparent px-2.5 py-2.5',
         'transition-colors duration-150 hover:border-line hover:bg-surface focus-within:border-line',
+        selectable && selected && 'border-accent bg-surface',
         busy && 'opacity-60',
       )}
     >
+      {selectable ? (
+        <>
+          <SelectOverlay
+            selected={selected}
+            label={`Select ${title}`}
+            onToggle={() => onToggleSelect?.(bookmark.id)}
+            rounded="rounded-xl"
+          />
+          <span className="pointer-events-none relative z-30">
+            <SelectMark selected={selected} size={15} />
+          </span>
+        </>
+      ) : null}
+
       <Preview bookmark={bookmark} compact className="h-11 w-11 shrink-0 rounded-lg sm:h-12 sm:w-16" />
 
       <div className="min-w-0 flex-1">
@@ -77,21 +101,23 @@ export function BookmarkRow({ bookmark, collection, busy, ...actions }: RowProps
         </span>
       ) : null}
 
-      <Menu
-        label={`Actions for ${title}`}
-        items={buildMenuItems(bookmark, actions)}
-        trigger={(triggerProps) => (
-          <button
-            type="button"
-            {...triggerProps}
-            aria-haspopup="menu"
-            aria-label={`Actions for ${title}`}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-hover hover:text-ink"
-          >
-            <MoreVertical size={16} aria-hidden />
-          </button>
-        )}
-      />
+      {selectable ? null : (
+        <Menu
+          label={`Actions for ${title}`}
+          items={buildMenuItems(bookmark, actions)}
+          trigger={(triggerProps) => (
+            <button
+              type="button"
+              {...triggerProps}
+              aria-haspopup="menu"
+              aria-label={`Actions for ${title}`}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-hover hover:text-ink"
+            >
+              <MoreVertical size={16} aria-hidden />
+            </button>
+          )}
+        />
+      )}
     </article>
   );
 }

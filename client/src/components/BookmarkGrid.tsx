@@ -9,6 +9,10 @@ interface BookmarkGridProps extends BookmarkActions {
   view: ViewMode;
   cardSize: CardSize;
   busyIds: ReadonlySet<number>;
+  /** True while the view is in selection mode. */
+  selectable?: boolean;
+  selectedIds?: ReadonlySet<number>;
+  onToggleSelect?: (id: number) => void;
 }
 
 /** Column counts per card size. Small still shows two across on a phone. */
@@ -33,6 +37,9 @@ export function BookmarkGrid({
   view,
   cardSize,
   busyIds,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
   ...actions
 }: BookmarkGridProps) {
   const byId = new Map(collections.map((collection) => [collection.id, collection]));
@@ -46,6 +53,9 @@ export function BookmarkGrid({
             bookmark={bookmark}
             collection={bookmark.collectionId ? byId.get(bookmark.collectionId) : undefined}
             busy={busyIds.has(bookmark.id)}
+            selectable={selectable}
+            selected={selectedIds?.has(bookmark.id) ?? false}
+            onToggleSelect={onToggleSelect}
             {...actions}
           />
         ))}
@@ -62,6 +72,9 @@ export function BookmarkGrid({
           collection={bookmark.collectionId ? byId.get(bookmark.collectionId) : undefined}
           size={cardSize}
           busy={busyIds.has(bookmark.id)}
+          selectable={selectable}
+          selected={selectedIds?.has(bookmark.id) ?? false}
+          onToggleSelect={onToggleSelect}
           {...actions}
         />
       ))}

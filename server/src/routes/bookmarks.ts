@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import {
   createBookmark,
   deleteBookmark,
+  deleteBookmarks,
   getBookmark,
   listBookmarks,
   setPinned,
@@ -112,6 +113,14 @@ bookmarksRouter.post('/', (req, res) => {
 
   if (input.fetchMetadata !== false) enqueueEnrich(result.bookmark.id);
   res.status(201).json({ bookmark: result.bookmark });
+});
+
+bookmarksRouter.post('/bulk-delete', async (req, res) => {
+  const { ids } = parseBody(
+    z.object({ ids: z.array(z.number().int().positive()).min(1).max(1000) }),
+    req.body,
+  );
+  res.json({ deleted: await deleteBookmarks(ids) });
 });
 
 bookmarksRouter.get('/:id', (req, res) => {

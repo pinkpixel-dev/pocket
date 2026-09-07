@@ -8,6 +8,7 @@ import { SettingsView } from './components/SettingsView';
 import { BookmarkFormDialog, type FormMode } from './components/BookmarkFormDialog';
 import { CollectionDialog } from './components/CollectionDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { SelectionBar } from './components/SelectionBar';
 import { MoveDialog } from './components/MoveDialog';
 import { useToast } from './components/ui/Toaster';
 import { useLibrary } from './hooks/useLibrary';
@@ -55,6 +56,12 @@ export default function App() {
   const [navOpen, setNavOpen] = useState(false);
   const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(new Set());
 
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set());
+  const [selectingAll, setSelectingAll] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+
   const [formState, setFormState] = useState<{
     open: boolean;
     mode: FormMode;
@@ -91,6 +98,9 @@ export default function App() {
 
   useEffect(() => {
     setNavOpen(false);
+    // A selection only makes sense inside the view it was made in.
+    setSelectMode(false);
+    setSelectedIds(new Set());
   }, [library.route]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -112,6 +122,69 @@ export default function App() {
     observer.observe(node);
     return () => observer.disconnect();
   }, [hasMore, loadMore, bookmarks.length]);
+
+  const toggleSelect = useCallback((id: number) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }, []);
+
+  // Escape leaves selection mode, the way it closes every other overlay here.
+  useEffect(() => {
+    if (!selectMode) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !bulkConfirm) exitSelectMode();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [selectMode, bulkConfirm, exitSelectMode]);
+
+  const selectAll = async () => {
+    setSelectingAll(true);
+    try {
+      setSelectedIds(new Set(await library.collectAllIds()));
+    } catch {
+      toast.error('The full list could not be loaded, so nothing was selected.');
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
+  /**
+   * Deleting after an import can mean a few hundred links at once, so the ids
+   * go over in batches the server is happy to take in one request.
+   */
+  const confirmBulkDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setBulkDeleting(true);
+    let deleted = 0;
+    try {
+      for (let index = 0; index < ids.length; index += 500) {
+        const result = await api.bulkDeleteBookmarks(ids.slice(index, index + 500));
+        deleted += result.deleted;
+      }
+      library.removeBookmarks(ids);
+      toast.success(`Deleted ${pluralize(deleted, 'bookmark')}.`);
+      setBulkConfirm(false);
+      exitSelectMode();
+      await library.reload();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Those could not be deleted.');
+      if (deleted > 0) await library.reload();
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const openCreate = useCallback(() => {
     setFormError(null);
@@ -390,6 +463,23 @@ export default function App() {
           onOpenNav={() => setNavOpen(true)}
           onAdd={openCreate}
           showControls={!isSettings}
+          canSelect={!isSettings && !selectMode && library.bookmarks.length > 0}
+          onStartSelecting={() => setSelectMode(true)}
+          banner={
+            selectMode && !isSettings ? (
+              <SelectionBar
+                count={selectedIds.size}
+                total={library.total}
+                allSelected={selectedIds.size > 0 && selectedIds.size >= library.total}
+                selectingAll={selectingAll}
+                deleting={bulkDeleting}
+                onSelectAll={() => void selectAll()}
+                onClear={() => setSelectedIds(new Set())}
+                onDelete={() => setBulkConfirm(true)}
+                onExit={exitSelectMode}
+              />
+            ) : null
+          }
         />
 
         <main className="min-w-0 flex-1">
@@ -435,6 +525,9 @@ export default function App() {
                     view={library.view}
                     cardSize={library.cardSize}
                     busyIds={busyIds}
+                    selectable={selectMode}
+                    selectedIds={selectedIds}
+                    onToggleSelect={toggleSelect}
                     {...actions}
                   />
                   <div ref={sentinelRef} aria-hidden className="h-px" />
@@ -491,6 +584,16 @@ export default function App() {
         busy={deleteTarget ? busyIds.has(deleteTarget.id) : false}
         onConfirm={() => void confirmDelete()}
         onClose={() => setDeleteTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={bulkConfirm}
+        title={`Delete ${pluralize(selectedIds.size, 'bookmark')}?`}
+        message={`${pluralize(selectedIds.size, 'bookmark')} will be removed from your library. This cannot be undone.`}
+        confirmLabel={`Delete ${selectedIds.size}`}
+        busy={bulkDeleting}
+        onConfirm={() => void confirmBulkDelete()}
+        onClose={() => setBulkConfirm(false)}
       />
 
       <ConfirmDialog

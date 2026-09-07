@@ -22,6 +22,7 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Search across titles, URLs, descriptions, site names, and tags.
 - Pinned bookmarks, which float to the top of every view.
 - Grid view for browsing and list view for scanning or tidying up.
+- Selection mode for clearing out links in bulk. Turn it on from the toolbar, tap the cards or rows you want, or select everything in the current view, then delete the lot in one step. This is the fast way to empty "Needs attention" after an import drags in a few hundred dead links.
 - Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
 - Mobile PWA support. Add Pocket to your phone home screen for a standalone app experience.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.

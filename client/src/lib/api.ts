@@ -116,6 +116,11 @@ export const api = {
     return call(`/api/bookmarks/${id}`, { method: 'DELETE' });
   },
 
+  /** Deletes many bookmarks at once. Ids that no longer exist are skipped. */
+  bulkDeleteBookmarks(ids: number[]): Promise<{ deleted: number }> {
+    return call('/api/bookmarks/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+  },
+
   setPinned(id: number, isPinned: boolean): Promise<{ bookmark: Bookmark }> {
     return call(`/api/bookmarks/${id}/pin`, { method: 'POST', body: JSON.stringify({ isPinned }) });
   },

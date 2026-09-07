@@ -2,6 +2,20 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.1.0 - September 7, 2026
+
+### 🧹 Bulk actions
+
+- Add selection mode to every bookmark view: tap the checkbox button in the toolbar, then tap cards or rows to pick them
+- Select all bookmarks matching the current view, including pages that have not been scrolled into yet, so a full "Needs attention" list can be cleared in one go
+- Delete every selected bookmark at once with a confirmation step that names the count
+- Press Escape or "Done" to leave selection mode
+
+### 🛠️ API
+
+- Add `POST /api/bookmarks/bulk-delete`, which takes up to 1000 ids per request and reports how many rows were removed
+- Cached previews, favicons and covers shared by several deleted bookmarks are now released correctly in one pass
+
 ## 1.0.0 - September 7, 2026
 
 ### 🚀 Release
