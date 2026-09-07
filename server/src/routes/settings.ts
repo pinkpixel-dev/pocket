@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { publicAiSettings, readAiConfig, updateAiSettings } from '../services/settings.js';
+import { publicAiSettings, updateAiSettings } from '../services/settings.js';
 import { badRequest } from '../lib/errors.js';
+import { requireAuth, userIdOf } from '../middleware/auth.js';
 
 export const settingsRouter = Router();
+
+settingsRouter.use(requireAuth);
 
 const aiSchema = z.object({
   apiKey: z.string().max(400).optional(),
@@ -13,20 +16,16 @@ const aiSchema = z.object({
   createCollections: z.boolean().optional(),
 });
 
-settingsRouter.get('/settings', (_req, res) => {
-  res.json({ ai: publicAiSettings() });
+settingsRouter.get('/settings', (req, res) => {
+  res.json({ ai: publicAiSettings(userIdOf(req)) });
 });
 
 settingsRouter.patch('/settings/ai', (req, res) => {
+  const userId = userIdOf(req);
   const result = aiSchema.safeParse(req.body);
   if (!result.success) {
     throw badRequest(result.error.issues[0]?.message ?? 'Those settings could not be understood.');
   }
 
-  // The environment is the operator's decision and the browser cannot override it.
-  if (result.data.apiKey !== undefined && readAiConfig().keySource === 'env') {
-    throw badRequest('The key comes from POCKET_OPENAI_API_KEY. Change it there instead.');
-  }
-
-  res.json({ ai: updateAiSettings(result.data) });
+  res.json({ ai: updateAiSettings(userId, result.data) });
 });

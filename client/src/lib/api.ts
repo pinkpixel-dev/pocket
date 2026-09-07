@@ -11,6 +11,8 @@ import type {
   ImportFileOptions,
   ImportSummary,
   MetadataStatus,
+  SessionState,
+  SessionUser,
   SortKey,
   Stats,
   Tag,
@@ -32,6 +34,22 @@ export class ApiError extends Error {
     const payload = this.payload as { duplicate?: boolean; bookmark?: Bookmark } | undefined;
     return payload?.duplicate && payload.bookmark ? payload.bookmark : null;
   }
+
+  /** True when the answer was "sign in first" rather than a real failure. */
+  get needsSignIn(): boolean {
+    return this.status === 401;
+  }
+}
+
+/**
+ * Called whenever the server answers 401, so a session that expired while a
+ * tab sat open sends the app back to the sign-in screen instead of filling it
+ * with error toasts.
+ */
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
 }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -39,6 +57,9 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     response = await fetch(path, {
       ...init,
+      // The session lives in a cookie, which same-origin requests already send.
+      // Saying so explicitly keeps it working if this ever moves behind a proxy.
+      credentials: 'same-origin',
       headers:
         init?.body instanceof FormData
           ? init.headers
@@ -54,6 +75,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
+    // The sign-in and setup calls answer 401 for a wrong password, and that is
+    // not a dead session, so they opt out of the redirect.
+    if (response.status === 401 && !path.startsWith('/api/auth/')) onUnauthorized?.();
+
     const message =
       typeof payload === 'object' && payload !== null && 'error' in payload
         ? String((payload as { error: unknown }).error)
@@ -73,6 +98,59 @@ export interface BookmarkFilters {
 }
 
 export const api = {
+  /** Asked once at startup, and again after signing in or out. */
+  session(): Promise<SessionState> {
+    return call('/api/auth/session');
+  },
+
+  /** Claims the owner account on a fresh install. Fails once one exists. */
+  setup(input: { username: string; password: string; displayName?: string }): Promise<{
+    user: SessionUser;
+  }> {
+    return call('/api/auth/setup', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  login(input: { username: string; password: string }): Promise<{ user: SessionUser }> {
+    return call('/api/auth/login', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  logout(): Promise<void> {
+    return call('/api/auth/logout', { method: 'POST' });
+  },
+
+  updateProfile(displayName: string): Promise<{ user: SessionUser }> {
+    return call('/api/auth/profile', { method: 'PATCH', body: JSON.stringify({ displayName }) });
+  },
+
+  /** Signs out every other device, which is the point of changing it. */
+  changePassword(input: { currentPassword: string; newPassword: string }): Promise<{
+    ok: boolean;
+    signedOutElsewhere: number;
+  }> {
+    return call('/api/auth/password', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  listUsers(): Promise<{ users: SessionUser[] }> {
+    return call('/api/users');
+  },
+
+  createUser(input: { username: string; password: string; displayName?: string }): Promise<{
+    user: SessionUser;
+  }> {
+    return call('/api/users', { method: 'POST', body: JSON.stringify(input) });
+  },
+
+  resetUserPassword(id: number, newPassword: string): Promise<{ ok: boolean }> {
+    return call(`/api/users/${id}/password`, {
+      method: 'POST',
+      body: JSON.stringify({ newPassword }),
+    });
+  },
+
+  deleteUser(id: number): Promise<void> {
+    return call(`/api/users/${id}`, { method: 'DELETE' });
+  },
+
   listBookmarks(
     filters: BookmarkFilters,
     page?: { limit?: number; offset?: number },

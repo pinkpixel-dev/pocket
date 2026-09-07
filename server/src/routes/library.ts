@@ -15,6 +15,7 @@ import { countBookmarks } from '../services/bookmarks.js';
 import { db } from '../db/index.js';
 import { queueSize } from '../services/queue.js';
 import { badRequest } from '../lib/errors.js';
+import { requireAuth, userIdOf } from '../middleware/auth.js';
 import { cancelLibraryAudit, getAuditStatus, startLibraryAudit } from '../services/audit.js';
 import { isAiConfigured } from '../services/settings.js';
 import {
@@ -25,6 +26,8 @@ import {
 import { suggestCollectionCleanup, suggestTagCleanup } from '../services/ai-cleanup.js';
 
 export const libraryRouter = Router();
+
+libraryRouter.use(requireAuth);
 
 const idParam = z.coerce.number().int().positive();
 
@@ -46,21 +49,23 @@ function parse<T extends z.ZodType>(schema: T, body: unknown): z.infer<T> {
   return result.data;
 }
 
-libraryRouter.get('/collections', (_req, res) => {
-  res.json({ collections: listCollections() });
+libraryRouter.get('/collections', (req, res) => {
+  res.json({ collections: listCollections(userIdOf(req)) });
 });
 
 libraryRouter.post('/collections', (req, res) => {
-  res.status(201).json({ collection: createCollection(parse(collectionSchema, req.body)) });
+  res.status(201).json({ collection: createCollection(userIdOf(req), parse(collectionSchema, req.body)) });
 });
 
 libraryRouter.patch('/collections/:id', (req, res) => {
   const id = idParam.parse(req.params.id);
-  res.json({ collection: updateCollection(id, parse(collectionSchema.partial(), req.body)) });
+  res.json({
+    collection: updateCollection(userIdOf(req), id, parse(collectionSchema.partial(), req.body)),
+  });
 });
 
 libraryRouter.delete('/collections/:id', (req, res) => {
-  deleteCollection(idParam.parse(req.params.id));
+  deleteCollection(userIdOf(req), idParam.parse(req.params.id));
   res.status(204).end();
 });
 
@@ -72,7 +77,7 @@ libraryRouter.post('/collections/merge', (req, res) => {
   });
   const data = parse(schema, req.body);
   res.json(
-    mergeCollections(data.sourceIds, data.targetId, {
+    mergeCollections(userIdOf(req), data.sourceIds, data.targetId, {
       tagWithSourceNames: data.tagWithSourceNames ?? false,
     }),
   );
@@ -83,13 +88,13 @@ libraryRouter.post('/collections/convert-to-tags', (req, res) => {
     collectionIds: z.array(z.number().int().positive()).min(1),
   });
   const data = parse(schema, req.body);
-  res.json(convertCollectionsToTags(data.collectionIds));
+  res.json(convertCollectionsToTags(userIdOf(req), data.collectionIds));
 });
 
 libraryRouter.get('/library/uncollected-domains', (req, res) => {
   const limitParsed = req.query.limit ? parseInt(String(req.query.limit), 10) : 25;
   const limit = Math.min(Math.max(Number.isFinite(limitParsed) ? limitParsed : 25, 1), 100);
-  res.json({ domains: getUncollectedDomainStats(limit) });
+  res.json({ domains: getUncollectedDomainStats(userIdOf(req), limit) });
 });
 
 libraryRouter.post('/library/batch-assign-collection', (req, res) => {
@@ -98,19 +103,24 @@ libraryRouter.post('/library/batch-assign-collection', (req, res) => {
     collectionId: z.number().int().positive().nullable(),
   });
   const data = parse(schema, req.body);
-  const updatedCount = batchAssignBookmarksToCollection(data.bookmarkIds, data.collectionId);
+  const updatedCount = batchAssignBookmarksToCollection(
+    userIdOf(req),
+    data.bookmarkIds,
+    data.collectionId,
+  );
   res.json({ updatedCount });
 });
 
 libraryRouter.post('/ai/plan-collections', async (req, res, next) => {
   try {
-    if (!isAiConfigured()) {
+    const userId = userIdOf(req);
+    if (!isAiConfigured(userId)) {
       throw badRequest('Add an OpenAI API key in Settings first.');
     }
     const schema = z.object({
       bookmarkIds: z.array(z.number().int().positive()).optional(),
     });
-    res.json(await planCollections(parse(schema, req.body)));
+    res.json(await planCollections(userId, parse(schema, req.body)));
   } catch (error) {
     next(error);
   }
@@ -118,7 +128,8 @@ libraryRouter.post('/ai/plan-collections', async (req, res, next) => {
 
 libraryRouter.post('/ai/suggest-categories', async (req, res, next) => {
   try {
-    if (!isAiConfigured()) {
+    const userId = userIdOf(req);
+    if (!isAiConfigured(userId)) {
       throw badRequest('Add an OpenAI API key in Settings first.');
     }
     const schema = z.object({
@@ -127,30 +138,32 @@ libraryRouter.post('/ai/suggest-categories', async (req, res, next) => {
       collections: z.array(z.string().min(1).max(80)).max(40).optional(),
     });
     const data = parse(schema, req.body);
-    const result = await suggestBatchCollections(data);
+    const result = await suggestBatchCollections(userId, data);
     res.json(result);
   } catch (error) {
     next(error);
   }
 });
 
-libraryRouter.post('/ai/suggest-collection-cleanup', async (_req, res, next) => {
+libraryRouter.post('/ai/suggest-collection-cleanup', async (req, res, next) => {
   try {
-    if (!isAiConfigured()) {
+    const userId = userIdOf(req);
+    if (!isAiConfigured(userId)) {
       throw badRequest('Add an OpenAI API key in Settings first.');
     }
-    res.json(await suggestCollectionCleanup());
+    res.json(await suggestCollectionCleanup(userId));
   } catch (error) {
     next(error);
   }
 });
 
-libraryRouter.post('/ai/suggest-tag-cleanup', async (_req, res, next) => {
+libraryRouter.post('/ai/suggest-tag-cleanup', async (req, res, next) => {
   try {
-    if (!isAiConfigured()) {
+    const userId = userIdOf(req);
+    if (!isAiConfigured(userId)) {
       throw badRequest('Add an OpenAI API key in Settings first.');
     }
-    res.json(await suggestTagCleanup());
+    res.json(await suggestTagCleanup(userId));
   } catch (error) {
     next(error);
   }
@@ -167,17 +180,17 @@ libraryRouter.post('/ai/apply-categories', (req, res) => {
     ).min(1),
   });
   const data = parse(schema, req.body);
-  res.json(applyBatchCategorization(data.assignments));
+  res.json(applyBatchCategorization(userIdOf(req), data.assignments));
 });
 
-libraryRouter.get('/tags', (_req, res) => {
-  res.json({ tags: listTags() });
+libraryRouter.get('/tags', (req, res) => {
+  res.json({ tags: listTags(userIdOf(req)) });
 });
 
 libraryRouter.patch('/tags/:id', (req, res) => {
   const id = idParam.parse(req.params.id);
   const { name } = parse(z.object({ name: z.string().min(1).max(60) }), req.body);
-  res.json({ tag: renameTag(id, name) });
+  res.json({ tag: renameTag(userIdOf(req), id, name) });
 });
 
 libraryRouter.post('/tags/merge', (req, res) => {
@@ -186,7 +199,7 @@ libraryRouter.post('/tags/merge', (req, res) => {
     target: z.string().min(1).max(60),
   });
   const data = parse(schema, req.body);
-  res.json(mergeTags(data.sourceIds, data.target));
+  res.json(mergeTags(userIdOf(req), data.sourceIds, data.target));
 });
 
 libraryRouter.post('/tags/bulk-delete', (req, res) => {
@@ -194,58 +207,62 @@ libraryRouter.post('/tags/bulk-delete', (req, res) => {
     ids: z.array(z.number().int().positive()).min(1).max(1000),
   });
   const data = parse(schema, req.body);
-  res.json({ deleted: deleteTags(data.ids) });
+  res.json({ deleted: deleteTags(userIdOf(req), data.ids) });
 });
 
 libraryRouter.delete('/tags/:id', (req, res) => {
-  deleteTag(idParam.parse(req.params.id));
+  deleteTag(userIdOf(req), idParam.parse(req.params.id));
   res.status(204).end();
 });
 
-libraryRouter.get('/stats', (_req, res) => {
-  const pinned = (db.prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE is_pinned = 1').get() as {
-    count: number;
-  }).count;
+libraryRouter.get('/stats', (req, res) => {
+  const userId = userIdOf(req);
+  const pinned = (
+    db
+      .prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ? AND is_pinned = 1')
+      .get(userId) as { count: number }
+  ).count;
   const untagged = (
     db
       .prepare(
         `SELECT COUNT(*) AS count FROM bookmarks b
-          WHERE NOT EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id)`,
+          WHERE b.user_id = ?
+            AND NOT EXISTS (SELECT 1 FROM bookmark_tags bt WHERE bt.bookmark_id = b.id)`,
       )
-      .get() as { count: number }
+      .get(userId) as { count: number }
   ).count;
   const uncollected = (
-    db.prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE collection_id IS NULL').get() as {
-      count: number;
-    }
+    db
+      .prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ? AND collection_id IS NULL')
+      .get(userId) as { count: number }
   ).count;
   const needsAttention = (
-    db.prepare("SELECT COUNT(*) AS count FROM bookmarks WHERE metadata_status = 'failed'").get() as {
-      count: number;
-    }
+    db
+      .prepare("SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ? AND metadata_status = 'failed'")
+      .get(userId) as { count: number }
   ).count;
 
   res.json({
-    total: countBookmarks(),
+    total: countBookmarks(userId),
     pinned,
     untagged,
     uncollected,
     needsAttention,
-    collections: listCollections().length,
-    tags: listTags().length,
-    pendingJobs: queueSize(),
+    collections: listCollections(userId).length,
+    tags: listTags(userId).length,
+    pendingJobs: queueSize(userId),
   });
 });
 
-libraryRouter.get('/audit-links', (_req, res) => {
-  res.json(getAuditStatus());
+libraryRouter.get('/audit-links', (req, res) => {
+  res.json(getAuditStatus(userIdOf(req)));
 });
 
-libraryRouter.post('/audit-links', (_req, res) => {
-  res.json(startLibraryAudit());
+libraryRouter.post('/audit-links', (req, res) => {
+  res.json(startLibraryAudit(userIdOf(req)));
 });
 
-libraryRouter.post('/audit-links/cancel', (_req, res) => {
-  res.json({ cancelled: cancelLibraryAudit() });
+libraryRouter.post('/audit-links/cancel', (req, res) => {
+  res.json({ cancelled: cancelLibraryAudit(userIdOf(req)) });
 });
 

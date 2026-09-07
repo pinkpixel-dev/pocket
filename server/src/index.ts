@@ -6,11 +6,14 @@ import { ZodError } from 'zod';
 import { config, ensureDataDirs } from './config.js';
 import { closeDatabase } from './db/index.js';
 import { HttpError } from './lib/errors.js';
+import { attachUser, requireAuth } from './middleware/auth.js';
+import { authRouter } from './routes/auth.js';
 import { bookmarksRouter } from './routes/bookmarks.js';
 import { libraryRouter } from './routes/library.js';
 import { settingsRouter } from './routes/settings.js';
 import { transferRouter } from './routes/transfer.js';
 import { resumePendingJobs } from './services/queue.js';
+import { sweepExpiredSessions } from './services/sessions.js';
 
 ensureDataDirs();
 
@@ -21,10 +24,19 @@ app.set('trust proxy', true);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 
+/*
+ * Resolves the session cookie once, before anything that cares who is asking.
+ * Scoped to the two prefixes that do, so serving the frontend's own JavaScript
+ * does not cost a database lookup per file.
+ */
+app.use(['/api', '/media'], attachUser);
+
+/** Deliberately open, so a NAS health check does not need an account. */
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', version: process.env.npm_package_version ?? '0.1.0' });
 });
 
+app.use('/api', authRouter);
 app.use('/api/bookmarks', bookmarksRouter);
 app.use('/api', libraryRouter);
 app.use('/api', settingsRouter);
@@ -33,9 +45,14 @@ app.use('/api', transferRouter);
 /**
  * Cached previews are content-addressed, so they never change under a given
  * name. Locking them down matters because the bytes came from the open web.
+ *
+ * Signing in is required, but not ownership of the bookmark behind the file:
+ * the names are content hashes, so two accounts that saved the same page share
+ * one file, and knowing a name already means having the bytes.
  */
 app.use(
   '/media',
+  requireAuth,
   express.static(config.dataDir, {
     index: false,
     dotfiles: 'deny',
@@ -109,7 +126,19 @@ const server = app.listen(config.port, config.host, () => {
   console.log(`[pocket] data directory: ${config.dataDir}`);
   const resumed = resumePendingJobs();
   if (resumed > 0) console.log(`[pocket] resuming metadata for ${resumed} bookmark(s)`);
+  sweepExpiredSessions();
 });
+
+// Expired sessions are also dropped when one is used, so this is only here to
+// keep the table from growing on behalf of devices that never come back.
+const sessionSweep = setInterval(() => {
+  try {
+    sweepExpiredSessions();
+  } catch (error) {
+    console.error('[pocket] could not sweep expired sessions:', error);
+  }
+}, 6 * 60 * 60 * 1000);
+sessionSweep.unref();
 
 function shutdown(signal: string): void {
   console.log(`[pocket] ${signal} received, shutting down`);

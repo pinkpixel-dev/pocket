@@ -123,28 +123,35 @@ const ASSIGN_SCHEMA = {
   additionalProperties: false,
 } as const;
 
-function countUncollected(): number {
+function countUncollected(userId: number): number {
   return (
-    db.prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE collection_id IS NULL').get() as {
-      count: number;
-    }
+    db
+      .prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ? AND collection_id IS NULL')
+      .get(userId) as { count: number }
   ).count;
 }
 
-function selectUncollected(bookmarkIds: number[] | undefined, limit: number): BookmarkRow[] {
+function selectUncollected(
+  userId: number,
+  bookmarkIds: number[] | undefined,
+  limit: number,
+): BookmarkRow[] {
   if (Array.isArray(bookmarkIds) && bookmarkIds.length > 0) {
     const placeholders = bookmarkIds.map(() => '?').join(',');
     return db
       .prepare(
-        `SELECT * FROM bookmarks WHERE id IN (${placeholders}) AND collection_id IS NULL
+        `SELECT * FROM bookmarks
+          WHERE user_id = ? AND id IN (${placeholders}) AND collection_id IS NULL
           ORDER BY id DESC LIMIT ?`,
       )
-      .all(...bookmarkIds, limit) as BookmarkRow[];
+      .all(userId, ...bookmarkIds, limit) as BookmarkRow[];
   }
 
   return db
-    .prepare('SELECT * FROM bookmarks WHERE collection_id IS NULL ORDER BY id DESC LIMIT ?')
-    .all(limit) as BookmarkRow[];
+    .prepare(
+      'SELECT * FROM bookmarks WHERE user_id = ? AND collection_id IS NULL ORDER BY id DESC LIMIT ?',
+    )
+    .all(userId, limit) as BookmarkRow[];
 }
 
 function describeBookmark(row: BookmarkRow, withId: boolean): string {
@@ -162,14 +169,14 @@ function describeBookmark(row: BookmarkRow, withId: boolean): string {
 }
 
 /** The tags worth offering back to the model, busiest first. */
-function describeTags(): string {
-  const tags = listTags().slice(0, TAG_SAMPLE);
+function describeTags(userId: number): string {
+  const tags = listTags(userId).slice(0, TAG_SAMPLE);
   if (tags.length === 0) return '(none yet)';
   return tags.map((tag) => `${tag.name} (${tag.bookmarkCount})`).join(', ');
 }
 
-function describeExisting(): string {
-  const collections = listCollections();
+function describeExisting(userId: number): string {
+  const collections = listCollections(userId);
   if (collections.length === 0) return '(none yet)';
   return collections
     .map((item) => `- ${item.name} (${item.bookmarkCount} bookmarks)`)
@@ -181,9 +188,12 @@ function describeExisting(): string {
  * library from growing a collection per bookmark. Filing one link at a time
  * cannot see that "AI music" and "AI prompting" are the same shelf.
  */
-export async function planCollections(options: { bookmarkIds?: number[] } = {}): Promise<CollectionPlan> {
-  const totalUncollected = countUncollected();
-  const candidates = selectUncollected(options.bookmarkIds, PLAN_SAMPLE);
+export async function planCollections(
+  userId: number,
+  options: { bookmarkIds?: number[] } = {},
+): Promise<CollectionPlan> {
+  const totalUncollected = countUncollected(userId);
+  const candidates = selectUncollected(userId, options.bookmarkIds, PLAN_SAMPLE);
 
   if (candidates.length === 0) {
     return { collections: [], bookmarkIds: [], totalUncollected };
@@ -195,7 +205,7 @@ export async function planCollections(options: { bookmarkIds?: number[] } = {}):
 
   const input = [
     'Collections this library already has:',
-    describeExisting(),
+    describeExisting(userId),
     '',
     `Bookmarks waiting to be filed (${candidates.length}):`,
     candidates.map((row) => describeBookmark(row, false)).join('\n'),
@@ -212,7 +222,7 @@ export async function planCollections(options: { bookmarkIds?: number[] } = {}):
     '- Leave links that fit nothing out. They stay unfiled, which is fine.',
   ].join('\n');
 
-  const parsed = await callAiJson<{ collections?: Array<{ name?: string; description?: string }> }>({
+  const parsed = await callAiJson<{ collections?: Array<{ name?: string; description?: string }> }>(userId, {
     instructions: PLAN_SYSTEM_PROMPT,
     input,
     schemaName: 'collection_plan',
@@ -220,7 +230,7 @@ export async function planCollections(options: { bookmarkIds?: number[] } = {}):
   });
 
   const existingNames = new Map(
-    listCollections().map((item) => [item.name.toLowerCase(), item.name]),
+    listCollections(userId).map((item) => [item.name.toLowerCase(), item.name]),
   );
   const seen = new Set<string>();
   const collections: PlannedCollection[] = [];
@@ -261,20 +271,21 @@ export interface BatchCategorizeOptions {
 }
 
 export async function suggestBatchCollections(
+  userId: number,
   options: BatchCategorizeOptions = {},
 ): Promise<AiBatchResult> {
-  const totalUncollected = countUncollected();
+  const totalUncollected = countUncollected(userId);
   if (totalUncollected === 0) {
     return { suggestions: [], totalUncollected: 0, processedCount: 0 };
   }
 
   const limit = Math.min(Math.max(Number(options.limit) || 30, 1), ASSIGN_LIMIT);
-  const candidates = selectUncollected(options.bookmarkIds, limit);
+  const candidates = selectUncollected(userId, options.bookmarkIds, limit);
   if (candidates.length === 0) {
     return { suggestions: [], totalUncollected, processedCount: 0 };
   }
 
-  const existing = listCollections();
+  const existing = listCollections(userId);
   const existingNames = new Map(existing.map((item) => [item.name.toLowerCase(), item.name]));
 
   // Without a plan the library's own collections are the closed list, so a run
@@ -293,7 +304,7 @@ export async function suggestBatchCollections(
     allowedNames.map((name) => `- ${name}`).join('\n'),
     '',
     'Tags this library already uses, most used first:',
-    describeTags(),
+    describeTags(userId),
     '',
     `File these ${candidates.length} bookmarks:`,
     candidates.map((row) => describeBookmark(row, true)).join('\n\n'),
@@ -313,7 +324,7 @@ export async function suggestBatchCollections(
       tags: string[];
       confidence: 'high' | 'medium' | 'low';
     }>;
-  }>({
+  }>(userId, {
     instructions: ASSIGN_SYSTEM_PROMPT,
     input,
     schemaName: 'batch_categorization',
@@ -349,6 +360,7 @@ export async function suggestBatchCollections(
 }
 
 export function applyBatchCategorization(
+  userId: number,
   assignments: ApplyCategoryAssignment[],
 ): { applied: number } {
   if (assignments.length === 0) return { applied: 0 };
@@ -356,7 +368,7 @@ export function applyBatchCategorization(
   return db.transaction(() => {
     let applied = 0;
     const updateColStmt = db.prepare(
-      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
     );
     const linkStmt = db.prepare(
       'INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)',
@@ -367,19 +379,25 @@ export function applyBatchCategorization(
       let collectionId: number | null = null;
 
       if (item.collectionName && item.collectionName.trim()) {
-        collectionId = ensureCollection(item.collectionName.trim()).id;
+        collectionId = ensureCollection(userId, item.collectionName.trim()).id;
       }
 
       if (collectionId !== null) {
-        updateColStmt.run(collectionId, item.bookmarkId);
-        applied += 1;
+        // An id from another library changes nothing, so the count follows the
+        // statement rather than the intent.
+        applied += updateColStmt.run(collectionId, item.bookmarkId, userId).changes;
       }
 
       if (Array.isArray(item.tags) && item.tags.length > 0) {
         const cleanedTags = item.tags.map(normalizeTagName).filter(Boolean);
         if (cleanedTags.length > 0) {
-          for (const tagId of ensureTagIds(cleanedTags)) {
-            linkStmt.run(item.bookmarkId, tagId);
+          const owned = db
+            .prepare('SELECT id FROM bookmarks WHERE id = ? AND user_id = ?')
+            .get(item.bookmarkId, userId);
+          if (owned) {
+            for (const tagId of ensureTagIds(userId, cleanedTags)) {
+              linkStmt.run(item.bookmarkId, tagId);
+            }
           }
         }
       }

@@ -4,15 +4,28 @@ import { Activity, Loader2, TriangleAlert } from 'lucide-react';
 import { TransferPanel } from './settings/TransferPanel';
 import { OrganizePanel } from './settings/OrganizePanel';
 import { AiPanel } from './settings/AiPanel';
+import { AccountPanel } from './settings/AccountPanel';
 import { Button } from './ui/Button';
 import { SelectField } from './ui/Field';
 import { useToast } from './ui/Toaster';
 import { pluralize, relativeTime } from '../lib/format';
 import { ACCENT_COLORS } from '../lib/theme';
 import { api } from '../lib/api';
-import type { AccentColor, AiSettings, AuditStatus, CardSize, Collection, Stats, Tag } from '../lib/types';
+import type {
+  AccentColor,
+  AiSettings,
+  AuditStatus,
+  CardSize,
+  Collection,
+  SessionUser,
+  Stats,
+  Tag,
+} from '../lib/types';
 
 interface SettingsViewProps {
+  user: SessionUser;
+  onUserChanged: (user: SessionUser) => void;
+  onSignOut: () => void;
   stats: Stats | null;
   collections: Collection[];
   tags: Tag[];
@@ -173,6 +186,9 @@ function LinkHealthSection({ stats, onChanged }: { stats: Stats | null; onChange
 }
 
 export function SettingsView({
+  user,
+  onUserChanged,
+  onSignOut,
   stats,
   collections,
   tags,
@@ -187,6 +203,10 @@ export function SettingsView({
 }: SettingsViewProps) {
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-3 py-5 sm:px-6 sm:py-6">
+      <Panel title="Your account">
+        <AccountPanel user={user} onUserChanged={onUserChanged} onSignOut={onSignOut} />
+      </Panel>
+
       <Panel title="Your library">
         <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4">
           {[
@@ -298,8 +318,13 @@ export function SettingsView({
             beside it in your mounted data directory, so a normal file backup captures everything.
           </p>
           <p>
-            It has no login of its own. Keep it on a trusted network, or put it behind a reverse proxy with
-            authentication before letting it reach the open internet.
+            Everyone who signs in gets their own library. Bookmarks, collections, tags and AI settings are
+            private to the account that made them, so sharing a NAS does not mean sharing a bookmark bar.
+          </p>
+          <p>
+            Sign-in is Pocket's own, and it is the only thing standing between the open internet and your
+            library. Keep it on a trusted network, or put it behind a reverse proxy with TLS before exposing
+            it.
           </p>
           <p className="text-ink-faint">
             Made with care by{' '}

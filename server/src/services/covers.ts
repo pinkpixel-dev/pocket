@@ -11,7 +11,7 @@ const setCoverPath = db.prepare(
   `UPDATE bookmarks
       SET cover_path = @coverPath,
           updated_at = datetime('now')
-    WHERE id = @id`,
+    WHERE id = @id AND user_id = @userId`,
 );
 
 /**
@@ -19,33 +19,33 @@ const setCoverPath = db.prepare(
  * uses it. Passing null clears the cover, which uncovers the fetched preview
  * again rather than leaving the card blank.
  */
-async function applyCover(id: number, coverPath: string | null): Promise<Bookmark> {
-  const row = getBookmarkRow(id);
+async function applyCover(userId: number, id: number, coverPath: string | null): Promise<Bookmark> {
+  const row = getBookmarkRow(userId, id);
   if (!row) throw notFound('That bookmark no longer exists.');
 
-  setCoverPath.run({ id, coverPath });
+  setCoverPath.run({ id, userId, coverPath });
 
   if (row.cover_path && row.cover_path !== coverPath) {
     await releaseImage(row.cover_path, id);
   }
-  return getBookmark(id);
+  return getBookmark(userId, id);
 }
 
-export async function setCoverFromUpload(id: number, buffer: Buffer): Promise<Bookmark> {
-  if (!getBookmarkRow(id)) throw notFound('That bookmark no longer exists.');
+export async function setCoverFromUpload(userId: number, id: number, buffer: Buffer): Promise<Bookmark> {
+  if (!getBookmarkRow(userId, id)) throw notFound('That bookmark no longer exists.');
 
   const stored = await storeImage(buffer, 'cover');
   if (!stored) throw badRequest(UNREADABLE);
 
-  return applyCover(id, stored.relativePath);
+  return applyCover(userId, id, stored.relativePath);
 }
 
 /**
  * Fetching by URL goes through the same guarded client as everything else, so
  * a pasted link cannot be used to reach something on the local network.
  */
-export async function setCoverFromUrl(id: number, imageUrl: string): Promise<Bookmark> {
-  if (!getBookmarkRow(id)) throw notFound('That bookmark no longer exists.');
+export async function setCoverFromUrl(userId: number, id: number, imageUrl: string): Promise<Bookmark> {
+  if (!getBookmarkRow(userId, id)) throw notFound('That bookmark no longer exists.');
 
   const url = parseUrl(imageUrl);
   let stored;
@@ -56,9 +56,9 @@ export async function setCoverFromUrl(id: number, imageUrl: string): Promise<Boo
   }
   if (!stored) throw badRequest('That link did not return an image Pocket can read.');
 
-  return applyCover(id, stored.relativePath);
+  return applyCover(userId, id, stored.relativePath);
 }
 
-export function removeCover(id: number): Promise<Bookmark> {
-  return applyCover(id, null);
+export function removeCover(userId: number, id: number): Promise<Bookmark> {
+  return applyCover(userId, id, null);
 }

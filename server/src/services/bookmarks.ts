@@ -1,7 +1,7 @@
 import { db } from '../db/index.js';
 import type { Bookmark, BookmarkQuery, BookmarkRow, MetadataStatus, SortKey } from '../lib/types.js';
 import { domainOf, normalizeUrl, parseUrl } from '../lib/url.js';
-import { conflict, notFound } from '../lib/errors.js';
+import { badRequest, conflict, notFound } from '../lib/errors.js';
 import { removeCachedImage } from './images.js';
 import { parseTagInput, pruneOrphanTags, setBookmarkTags } from './tags.js';
 
@@ -53,9 +53,11 @@ export interface BookmarkPage {
   total: number;
 }
 
-export function listBookmarks(query: BookmarkQuery = {}): BookmarkPage {
-  const where: string[] = [];
-  const params: Record<string, unknown> = {};
+export function listBookmarks(userId: number, query: BookmarkQuery = {}): BookmarkPage {
+  // Every other clause is optional. This one is not, which is why it is not
+  // pushed onto the array with the rest.
+  const where: string[] = ['b.user_id = @userId'];
+  const params: Record<string, unknown> = { userId };
 
   if (query.pinned) where.push('b.is_pinned = 1');
   if (query.uncollected) where.push('b.collection_id IS NULL');
@@ -92,7 +94,7 @@ export function listBookmarks(query: BookmarkQuery = {}): BookmarkPage {
     params.search = `%${search.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
   }
 
-  const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const clause = `WHERE ${where.join(' AND ')}`;
   const total = (
     db.prepare(`SELECT COUNT(*) AS count FROM bookmarks b ${clause}`).get(params) as { count: number }
   ).count;
@@ -114,21 +116,37 @@ export function listBookmarks(query: BookmarkQuery = {}): BookmarkPage {
   return { items: rows.map(mapBookmark), total };
 }
 
-export function getBookmarkRow(id: number): BookmarkRow | undefined {
-  return db.prepare('SELECT * FROM bookmarks WHERE id = ?').get(id) as BookmarkRow | undefined;
+export function getBookmarkRow(userId: number, id: number): BookmarkRow | undefined {
+  return db.prepare('SELECT * FROM bookmarks WHERE id = ? AND user_id = ?').get(id, userId) as
+    | BookmarkRow
+    | undefined;
 }
 
-export function getBookmark(id: number): Bookmark {
-  const row = getBookmarkRow(id);
+export function getBookmark(userId: number, id: number): Bookmark {
+  const row = getBookmarkRow(userId, id);
   if (!row) throw notFound('That bookmark no longer exists.');
   return mapBookmark(row);
 }
 
-export function findByNormalizedUrl(normalized: string): Bookmark | undefined {
-  const row = db.prepare('SELECT * FROM bookmarks WHERE normalized_url = ?').get(normalized) as
-    | BookmarkRow
-    | undefined;
+export function findByNormalizedUrl(userId: number, normalized: string): Bookmark | undefined {
+  const row = db
+    .prepare('SELECT * FROM bookmarks WHERE user_id = ? AND normalized_url = ?')
+    .get(userId, normalized) as BookmarkRow | undefined;
   return row ? mapBookmark(row) : undefined;
+}
+
+/**
+ * A collection id arrives from the browser, so it is checked against the same
+ * account rather than trusted. Otherwise one person could file a link into
+ * someone else's collection by guessing a number.
+ */
+function ownedCollectionId(userId: number, collectionId: number | null | undefined): number | null {
+  if (collectionId === null || collectionId === undefined) return null;
+  const row = db
+    .prepare('SELECT id FROM collections WHERE id = ? AND user_id = ?')
+    .get(collectionId, userId) as { id: number } | undefined;
+  if (!row) throw badRequest('That collection is not in your library.');
+  return row.id;
 }
 
 export interface CreateBookmarkInput {
@@ -149,31 +167,33 @@ export interface CreateResult {
   duplicateOf?: Bookmark;
 }
 
-export function createBookmark(input: CreateBookmarkInput): CreateResult {
+export function createBookmark(userId: number, input: CreateBookmarkInput): CreateResult {
   const url = parseUrl(input.url);
   const normalized = normalizeUrl(url);
 
-  const existing = findByNormalizedUrl(normalized);
+  const existing = findByNormalizedUrl(userId, normalized);
   if (existing) return { bookmark: existing, created: false, duplicateOf: existing };
 
+  const collectionId = ownedCollectionId(userId, input.collectionId);
   const title = input.title?.trim().slice(0, 300) ?? '';
   const status: MetadataStatus = input.metadataStatus ?? 'pending';
 
   const id = db.transaction(() => {
     const result = db
       .prepare(
-        `INSERT INTO bookmarks (url, normalized_url, title, description, site_name,
+        `INSERT INTO bookmarks (user_id, url, normalized_url, title, description, site_name,
                                 collection_id, is_pinned, metadata_status, created_at, updated_at)
-         VALUES (@url, @normalized, @title, @description, @siteName,
+         VALUES (@userId, @url, @normalized, @title, @description, @siteName,
                  @collectionId, @isPinned, @status, @createdAt, datetime('now'))`,
       )
       .run({
+        userId,
         url: url.href,
         normalized,
         title,
         description: input.description?.trim().slice(0, 600) ?? '',
         siteName: domainOf(url.href),
-        collectionId: input.collectionId ?? null,
+        collectionId,
         isPinned: input.isPinned ? 1 : 0,
         status,
         createdAt: input.createdAt ?? new Date().toISOString().replace('T', ' ').slice(0, 19),
@@ -181,11 +201,11 @@ export function createBookmark(input: CreateBookmarkInput): CreateResult {
 
     const newId = Number(result.lastInsertRowid);
     const tags = parseTagInput(input.tags);
-    if (tags.length) setBookmarkTags(newId, tags);
+    if (tags.length) setBookmarkTags(userId, newId, tags);
     return newId;
   })();
 
-  return { bookmark: getBookmark(id), created: true };
+  return { bookmark: getBookmark(userId, id), created: true };
 }
 
 export interface UpdateBookmarkInput {
@@ -197,18 +217,18 @@ export interface UpdateBookmarkInput {
   isPinned?: boolean;
 }
 
-export function updateBookmark(id: number, input: UpdateBookmarkInput): Bookmark {
-  const row = getBookmarkRow(id);
+export function updateBookmark(userId: number, id: number, input: UpdateBookmarkInput): Bookmark {
+  const row = getBookmarkRow(userId, id);
   if (!row) throw notFound('That bookmark no longer exists.');
 
   const fields: string[] = [];
-  const params: Record<string, unknown> = { id };
+  const params: Record<string, unknown> = { id, userId };
 
   if (input.url !== undefined) {
     const url = parseUrl(input.url);
     const normalized = normalizeUrl(url);
     if (normalized !== row.normalized_url) {
-      const clash = findByNormalizedUrl(normalized);
+      const clash = findByNormalizedUrl(userId, normalized);
       if (clash) throw conflict('Another bookmark already points at that URL.', { bookmark: clash });
       fields.push('normalized_url = @normalized', 'site_name = @siteName');
       params.normalized = normalized;
@@ -228,7 +248,7 @@ export function updateBookmark(id: number, input: UpdateBookmarkInput): Bookmark
   }
   if (input.collectionId !== undefined) {
     fields.push('collection_id = @collectionId');
-    params.collectionId = input.collectionId;
+    params.collectionId = ownedCollectionId(userId, input.collectionId);
   }
   if (input.isPinned !== undefined) {
     fields.push('is_pinned = @isPinned');
@@ -237,20 +257,26 @@ export function updateBookmark(id: number, input: UpdateBookmarkInput): Bookmark
 
   db.transaction(() => {
     if (fields.length) {
-      db.prepare(`UPDATE bookmarks SET ${fields.join(', ')}, updated_at = datetime('now') WHERE id = @id`).run(
-        params,
-      );
+      db.prepare(
+        `UPDATE bookmarks SET ${fields.join(', ')}, updated_at = datetime('now')
+          WHERE id = @id AND user_id = @userId`,
+      ).run(params);
     }
     if (input.tags !== undefined) {
-      setBookmarkTags(id, parseTagInput(input.tags));
-      pruneOrphanTags();
+      setBookmarkTags(userId, id, parseTagInput(input.tags));
+      pruneOrphanTags(userId);
     }
   })();
 
-  return getBookmark(id);
+  return getBookmark(userId, id);
 }
 
-/** Content-addressed files are shared, so only delete one nothing else uses. */
+/**
+ * Content-addressed files are shared, so only delete one nothing else uses.
+ * The count deliberately spans every account: two people who saved the same
+ * page share one preview file on disk, and one of them deleting their copy
+ * must not blank the other's card.
+ */
 export async function releaseImage(relativePath: string | null, ignoreBookmarkId: number): Promise<void> {
   if (!relativePath) return;
   const { count } = db
@@ -262,8 +288,8 @@ export async function releaseImage(relativePath: string | null, ignoreBookmarkId
   if (count === 0) await removeCachedImage(relativePath);
 }
 
-export async function deleteBookmark(id: number): Promise<void> {
-  const row = getBookmarkRow(id);
+export async function deleteBookmark(userId: number, id: number): Promise<void> {
+  const row = getBookmarkRow(userId, id);
   if (!row) throw notFound('That bookmark no longer exists.');
 
   await releaseImage(row.preview_path, id);
@@ -271,8 +297,8 @@ export async function deleteBookmark(id: number): Promise<void> {
   await releaseImage(row.cover_path, id);
 
   db.transaction(() => {
-    db.prepare('DELETE FROM bookmarks WHERE id = ?').run(id);
-    pruneOrphanTags();
+    db.prepare('DELETE FROM bookmarks WHERE id = ? AND user_id = ?').run(id, userId);
+    pruneOrphanTags(userId);
   })();
 }
 
@@ -282,18 +308,18 @@ export async function deleteBookmark(id: number): Promise<void> {
  * survived; releasing per row before the delete would keep every file that two
  * doomed bookmarks happened to share.
  */
-export async function deleteBookmarks(ids: number[]): Promise<number> {
+export async function deleteBookmarks(userId: number, ids: number[]): Promise<number> {
   if (ids.length === 0) return 0;
 
   const rows = ids
-    .map((id) => getBookmarkRow(id))
+    .map((id) => getBookmarkRow(userId, id))
     .filter((row): row is BookmarkRow => row !== undefined);
 
   const deleted = db.transaction(() => {
-    const stmt = db.prepare('DELETE FROM bookmarks WHERE id = ?');
+    const stmt = db.prepare('DELETE FROM bookmarks WHERE id = ? AND user_id = ?');
     let count = 0;
-    for (const row of rows) count += stmt.run(row.id).changes;
-    pruneOrphanTags();
+    for (const row of rows) count += stmt.run(row.id, userId).changes;
+    pruneOrphanTags(userId);
     return count;
   })();
 
@@ -306,14 +332,20 @@ export async function deleteBookmarks(ids: number[]): Promise<number> {
   return deleted;
 }
 
-export function setPinned(id: number, isPinned: boolean): Bookmark {
+export function setPinned(userId: number, id: number, isPinned: boolean): Bookmark {
   const result = db
-    .prepare("UPDATE bookmarks SET is_pinned = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(isPinned ? 1 : 0, id);
+    .prepare(
+      "UPDATE bookmarks SET is_pinned = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
+    )
+    .run(isPinned ? 1 : 0, id, userId);
   if (result.changes === 0) throw notFound('That bookmark no longer exists.');
-  return getBookmark(id);
+  return getBookmark(userId, id);
 }
 
-export function countBookmarks(): number {
-  return (db.prepare('SELECT COUNT(*) AS count FROM bookmarks').get() as { count: number }).count;
+export function countBookmarks(userId: number): number {
+  return (
+    db.prepare('SELECT COUNT(*) AS count FROM bookmarks WHERE user_id = ?').get(userId) as {
+      count: number;
+    }
+  ).count;
 }

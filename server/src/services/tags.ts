@@ -23,14 +23,14 @@ export function parseTagInput(input: string | string[] | undefined): string[] {
   return [...seen].slice(0, 30);
 }
 
-const insertTag = db.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
-const selectTag = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE');
+const insertTag = db.prepare('INSERT OR IGNORE INTO tags (user_id, name) VALUES (?, ?)');
+const selectTag = db.prepare('SELECT id FROM tags WHERE user_id = ? AND name = ? COLLATE NOCASE');
 
-export function ensureTagIds(names: string[]): number[] {
+export function ensureTagIds(userId: number, names: string[]): number[] {
   const ids: number[] = [];
   for (const name of names) {
-    insertTag.run(name);
-    const row = selectTag.get(name) as { id: number } | undefined;
+    insertTag.run(userId, name);
+    const row = selectTag.get(userId, name) as { id: number } | undefined;
     if (row) ids.push(row.id);
   }
   return ids;
@@ -39,42 +39,49 @@ export function ensureTagIds(names: string[]): number[] {
 const clearBookmarkTags = db.prepare('DELETE FROM bookmark_tags WHERE bookmark_id = ?');
 const linkBookmarkTag = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
 
-export function setBookmarkTags(bookmarkId: number, names: string[]): void {
-  const ids = ensureTagIds(names);
+export function setBookmarkTags(userId: number, bookmarkId: number, names: string[]): void {
+  const ids = ensureTagIds(userId, names);
   clearBookmarkTags.run(bookmarkId);
   for (const id of ids) linkBookmarkTag.run(bookmarkId, id);
 }
 
 /** Drops tags that no bookmark points at, so the sidebar stays honest. */
-export function pruneOrphanTags(): number {
+export function pruneOrphanTags(userId: number): number {
   const result = db
-    .prepare('DELETE FROM tags WHERE id NOT IN (SELECT tag_id FROM bookmark_tags)')
-    .run();
+    .prepare('DELETE FROM tags WHERE user_id = ? AND id NOT IN (SELECT tag_id FROM bookmark_tags)')
+    .run(userId);
   return result.changes;
 }
 
-export function listTags(): Tag[] {
+export function listTags(userId: number): Tag[] {
   return db
     .prepare(
       `SELECT t.id, t.name, COUNT(bt.bookmark_id) AS bookmarkCount
          FROM tags t
          LEFT JOIN bookmark_tags bt ON bt.tag_id = t.id
+        WHERE t.user_id = ?
         GROUP BY t.id
         ORDER BY bookmarkCount DESC, t.name ASC`,
     )
-    .all() as Tag[];
+    .all(userId) as Tag[];
 }
 
-export function renameTag(id: number, rawName: string): Tag {
+/** Every write below starts here, so an id from another library is a 404. */
+function ownedTag(userId: number, id: number): { id: number } | undefined {
+  return db.prepare('SELECT id FROM tags WHERE id = ? AND user_id = ?').get(id, userId) as
+    | { id: number }
+    | undefined;
+}
+
+export function renameTag(userId: number, id: number, rawName: string): Tag {
   const name = normalizeTagName(rawName);
   if (!name) throw badRequest('A tag needs a name.');
 
-  const existing = db.prepare('SELECT id FROM tags WHERE id = ?').get(id) as { id: number } | undefined;
-  if (!existing) throw notFound('That tag no longer exists.');
+  if (!ownedTag(userId, id)) throw notFound('That tag no longer exists.');
 
-  const clash = db.prepare('SELECT id FROM tags WHERE name = ? COLLATE NOCASE AND id != ?').get(name, id) as
-    | { id: number }
-    | undefined;
+  const clash = db
+    .prepare('SELECT id FROM tags WHERE user_id = ? AND name = ? COLLATE NOCASE AND id != ?')
+    .get(userId, name, id) as { id: number } | undefined;
 
   db.transaction(() => {
     if (clash) {
@@ -88,7 +95,7 @@ export function renameTag(id: number, rawName: string): Tag {
   })();
 
   const finalId = clash ? clash.id : id;
-  return listTags().find((tag) => tag.id === finalId) ?? { id: finalId, name, bookmarkCount: 0 };
+  return listTags(userId).find((tag) => tag.id === finalId) ?? { id: finalId, name, bookmarkCount: 0 };
 }
 
 /**
@@ -97,6 +104,7 @@ export function renameTag(id: number, rawName: string): Tag {
  * target may be a name the library does not have yet.
  */
 export function mergeTags(
+  userId: number,
   sourceIds: number[],
   rawTarget: string,
 ): { merged: number; movedLinks: number } {
@@ -104,23 +112,24 @@ export function mergeTags(
   if (!target) throw badRequest('A tag needs a name.');
 
   return db.transaction(() => {
-    const targetId = ensureTagIds([target])[0];
+    const targetId = ensureTagIds(userId, [target])[0];
     if (targetId === undefined) throw badRequest('That tag could not be created.');
 
     const move = db.prepare('UPDATE OR IGNORE bookmark_tags SET tag_id = ? WHERE tag_id = ?');
     const dropLinks = db.prepare('DELETE FROM bookmark_tags WHERE tag_id = ?');
-    const dropTag = db.prepare('DELETE FROM tags WHERE id = ?');
+    const dropTag = db.prepare('DELETE FROM tags WHERE id = ? AND user_id = ?');
 
     let merged = 0;
     let movedLinks = 0;
 
     for (const id of sourceIds) {
       if (id === targetId) continue;
+      if (!ownedTag(userId, id)) continue;
       movedLinks += move.run(targetId, id).changes;
       // A bookmark that already carried the target tag leaves a link behind,
       // which has to go before the tag row itself can.
       dropLinks.run(id);
-      merged += dropTag.run(id).changes;
+      merged += dropTag.run(id, userId).changes;
     }
 
     return { merged, movedLinks };
@@ -128,18 +137,18 @@ export function mergeTags(
 }
 
 /** Removes tags outright. The bookmarks keep everything else about them. */
-export function deleteTags(ids: number[]): number {
+export function deleteTags(userId: number, ids: number[]): number {
   if (ids.length === 0) return 0;
 
   return db.transaction(() => {
-    const stmt = db.prepare('DELETE FROM tags WHERE id = ?');
+    const stmt = db.prepare('DELETE FROM tags WHERE id = ? AND user_id = ?');
     let deleted = 0;
-    for (const id of ids) deleted += stmt.run(id).changes;
+    for (const id of ids) deleted += stmt.run(id, userId).changes;
     return deleted;
   })();
 }
 
-export function deleteTag(id: number): void {
-  const result = db.prepare('DELETE FROM tags WHERE id = ?').run(id);
+export function deleteTag(userId: number, id: number): void {
+  const result = db.prepare('DELETE FROM tags WHERE id = ? AND user_id = ?').run(id, userId);
   if (result.changes === 0) throw notFound('That tag no longer exists.');
 }

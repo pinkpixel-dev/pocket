@@ -2,6 +2,45 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.0.0 - September 7, 2026
+
+### 🔐 Accounts
+
+- Pocket has its own sign-in. The first person to open it picks a username and password, and that account owns whatever the library already held
+- Each account gets its own bookmarks, collections, tags and AI settings. Nobody can see anyone else's library, including the owner
+- Two people can save the same URL, and can each have a collection with the same name, without colliding
+- The owner adds and removes accounts from Settings, under "Your account". There is no open sign-up
+- The owner can reset a password for someone who forgot theirs, which signs that person's other devices out
+- Changing your own password signs out every other session
+- Removing an account deletes its bookmarks, collections and tags with it. The owner account cannot be deleted, and nobody can delete the account they are signed in with
+- Sessions are a 30-day `HttpOnly`, `SameSite=Lax` cookie. Behind a proxy that sets `X-Forwarded-Proto`, the `Secure` flag follows it, or `POCKET_SECURE_COOKIES` forces it either way
+- Passwords are hashed with scrypt from Node's own crypto, so no new native dependency. Session tokens are stored as SHA-256 hashes, so a database backup cannot be replayed as a live session
+- A wrong password and an unknown username take the same time to answer. Ten failed sign-ins from one address in fifteen minutes gets that address a 429
+
+### 🤖 AI
+
+- The OpenAI key, model, effort and toggles are per account, so nobody spends on anyone else's key
+- `POCKET_OPENAI_API_KEY` is now a shared fallback rather than a lock. Every account can use it without pasting anything, and an account that saves its own key uses that instead. Removing your own key falls back to the shared one
+- Settings says which of the two a request is going to be billed to
+
+### 🗄️ Database
+
+- Migration 4 adds `users` and `sessions`, and adds `user_id` to `bookmarks`, `collections`, `tags` and `settings`
+- Because SQLite cannot add a column to an existing `UNIQUE` constraint, those four tables are rebuilt by copy, drop and rename. Ids are preserved, so `bookmark_tags` is untouched. `foreign_key_check` runs before the migration finishes and refuses to leave a broken database behind
+- Everything that existed before this release is assigned to the owner account and reappears once setup is finished
+
+### 🧹 Maintenance
+
+- The link health scan is tracked per account, so one person's scan no longer overwrites the progress another person is watching, and neither can cancel the other's run
+- The metadata and AI job queue carries the owner of each job, and reports its pending count per account. The concurrency limit stays shared, since it is the NAS's uplink being protected
+- `services/isolation.test.ts` covers the separation with two real accounts: listings, search, reads, writes, deletes, bulk operations, cross-account ids, and account deletion
+
+### ⚠️ Upgrading
+
+- Take a backup before updating. The migration rebuilds four tables and cannot be reversed
+- On first start, Pocket asks you to create an account. Do this before telling anyone else the address, because whoever finishes setup inherits the existing library
+- Every API route except `/api/health` now requires a session, and so does `/media`. Anything scripted against the API needs to sign in at `POST /api/auth/login` and send the cookie back
+
 ## 1.0.0 - September 7, 2026
 
 ### 🚀 Release

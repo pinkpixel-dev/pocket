@@ -15,7 +15,7 @@ import { useLibrary } from './hooks/useLibrary';
 import { useSidebarWidth } from './hooks/useSidebarWidth';
 import { api, ApiError } from './lib/api';
 import { pluralize } from './lib/format';
-import type { Bookmark, BookmarkDraft, Collection } from './lib/types';
+import type { Bookmark, BookmarkDraft, Collection, SessionUser } from './lib/types';
 
 function useViewHeading(library: ReturnType<typeof useLibrary>): { title: string; subtitle: string } {
   const { route, collections, total, search } = library;
@@ -49,7 +49,14 @@ function useViewHeading(library: ReturnType<typeof useLibrary>): { title: string
   }, [route, collections, total, search]);
 }
 
-export default function App() {
+interface AppProps {
+  /** The signed-in account. App is only ever mounted once there is one. */
+  user: SessionUser;
+  onUserChanged: (user: SessionUser) => void;
+  onSignOut: () => void;
+}
+
+export default function App({ user, onUserChanged, onSignOut }: AppProps) {
   const library = useLibrary();
   const sidebar = useSidebarWidth();
   const toast = useToast();
@@ -502,6 +509,9 @@ export default function App() {
         <main className="min-w-0 flex-1">
           {isSettings ? (
             <SettingsView
+              user={user}
+              onUserChanged={onUserChanged}
+              onSignOut={onSignOut}
               stats={library.stats}
               collections={library.collections}
               tags={library.tags}

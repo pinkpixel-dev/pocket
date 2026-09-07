@@ -8,12 +8,16 @@ const COLLECTION_SELECT = `
          (SELECT COUNT(*) FROM bookmarks b WHERE b.collection_id = c.id) AS bookmarkCount
     FROM collections c`;
 
-export function listCollections(): Collection[] {
-  return db.prepare(`${COLLECTION_SELECT} ORDER BY c.position ASC, c.name ASC`).all() as Collection[];
+export function listCollections(userId: number): Collection[] {
+  return db
+    .prepare(`${COLLECTION_SELECT} WHERE c.user_id = ? ORDER BY c.position ASC, c.name ASC`)
+    .all(userId) as Collection[];
 }
 
-export function getCollection(id: number): Collection | undefined {
-  return db.prepare(`${COLLECTION_SELECT} WHERE c.id = ?`).get(id) as Collection | undefined;
+export function getCollection(userId: number, id: number): Collection | undefined {
+  return db.prepare(`${COLLECTION_SELECT} WHERE c.id = ? AND c.user_id = ?`).get(id, userId) as
+    | Collection
+    | undefined;
 }
 
 function cleanName(raw: string): string {
@@ -28,16 +32,20 @@ export interface CollectionInput {
   color?: string | null;
 }
 
-export function createCollection(input: CollectionInput): Collection {
+export function createCollection(userId: number, input: CollectionInput): Collection {
   const name = cleanName(input.name);
   const nextPosition =
-    (db.prepare('SELECT COALESCE(MAX(position), 0) AS max FROM collections').get() as { max: number }).max + 1;
+    (
+      db.prepare('SELECT COALESCE(MAX(position), 0) AS max FROM collections WHERE user_id = ?').get(userId) as {
+        max: number;
+      }
+    ).max + 1;
 
   try {
     const result = db
-      .prepare('INSERT INTO collections (name, description, color, position) VALUES (?, ?, ?, ?)')
-      .run(name, input.description?.trim() || null, input.color || null, nextPosition);
-    return getCollection(Number(result.lastInsertRowid))!;
+      .prepare('INSERT INTO collections (user_id, name, description, color, position) VALUES (?, ?, ?, ?, ?)')
+      .run(userId, name, input.description?.trim() || null, input.color || null, nextPosition);
+    return getCollection(userId, Number(result.lastInsertRowid))!;
   } catch (error) {
     if (error instanceof Error && error.message.includes('UNIQUE')) {
       throw conflict(`A collection named "${name}" already exists.`);
@@ -46,8 +54,12 @@ export function createCollection(input: CollectionInput): Collection {
   }
 }
 
-export function updateCollection(id: number, input: Partial<CollectionInput>): Collection {
-  const existing = getCollection(id);
+export function updateCollection(
+  userId: number,
+  id: number,
+  input: Partial<CollectionInput>,
+): Collection {
+  const existing = getCollection(userId, id);
   if (!existing) throw notFound('That collection no longer exists.');
 
   const name = input.name === undefined ? existing.name : cleanName(input.name);
@@ -56,11 +68,12 @@ export function updateCollection(id: number, input: Partial<CollectionInput>): C
   const color = input.color === undefined ? existing.color : input.color || null;
 
   try {
-    db.prepare('UPDATE collections SET name = ?, description = ?, color = ? WHERE id = ?').run(
+    db.prepare('UPDATE collections SET name = ?, description = ?, color = ? WHERE id = ? AND user_id = ?').run(
       name,
       description,
       color,
       id,
+      userId,
     );
   } catch (error) {
     if (error instanceof Error && error.message.includes('UNIQUE')) {
@@ -68,23 +81,23 @@ export function updateCollection(id: number, input: Partial<CollectionInput>): C
     }
     throw error;
   }
-  return getCollection(id)!;
+  return getCollection(userId, id)!;
 }
 
 /** Bookmarks survive; they just fall back to being uncollected. */
-export function deleteCollection(id: number): void {
-  const result = db.prepare('DELETE FROM collections WHERE id = ?').run(id);
+export function deleteCollection(userId: number, id: number): void {
+  const result = db.prepare('DELETE FROM collections WHERE id = ? AND user_id = ?').run(id, userId);
   if (result.changes === 0) throw notFound('That collection no longer exists.');
 }
 
-export function findCollectionByName(name: string): Collection | undefined {
-  return db.prepare(`${COLLECTION_SELECT} WHERE c.name = ? COLLATE NOCASE`).get(name.trim()) as
-    | Collection
-    | undefined;
+export function findCollectionByName(userId: number, name: string): Collection | undefined {
+  return db
+    .prepare(`${COLLECTION_SELECT} WHERE c.user_id = ? AND c.name = ? COLLATE NOCASE`)
+    .get(userId, name.trim()) as Collection | undefined;
 }
 
-export function ensureCollection(name: string): Collection {
-  return findCollectionByName(name) ?? createCollection({ name });
+export function ensureCollection(userId: number, name: string): Collection {
+  return findCollectionByName(userId, name) ?? createCollection(userId, { name });
 }
 
 const linkTagStmt = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
@@ -98,11 +111,12 @@ export interface MergeOptions {
 }
 
 export function mergeCollections(
+  userId: number,
   sourceIds: number[],
   targetId: number,
   options: MergeOptions = {},
 ): { movedCount: number; deletedCollections: number; taggedCount: number } {
-  const target = getCollection(targetId);
+  const target = getCollection(userId, targetId);
   if (!target) throw notFound('Target collection not found.');
 
   const validSources = sourceIds.filter((id) => id !== targetId);
@@ -111,22 +125,25 @@ export function mergeCollections(
   return db.transaction(() => {
     let movedCount = 0;
     let taggedCount = 0;
-    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ?');
+    let deletedCollections = 0;
+    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ? AND user_id = ?');
     const moveStmt = db.prepare(
-      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE collection_id = ?",
+      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE collection_id = ? AND user_id = ?",
     );
-    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ?');
+    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ? AND user_id = ?');
 
     for (const srcId of validSources) {
+      const source = getCollection(userId, srcId);
+      if (!source) continue;
+
       if (options.tagWithSourceNames) {
-        const source = getCollection(srcId);
-        const tagName = source ? normalizeTagName(source.name) : '';
+        const tagName = normalizeTagName(source.name);
         if (tagName) {
-          const tagId = ensureTagIds([tagName])[0];
+          const tagId = ensureTagIds(userId, [tagName])[0];
           if (tagId) {
             // Tagging happens before the move, while the bookmarks can still
             // be found by the collection they are leaving.
-            for (const row of selectBookmarks.all(srcId) as Array<{ id: number }>) {
+            for (const row of selectBookmarks.all(srcId, userId) as Array<{ id: number }>) {
               linkTagStmt.run(row.id, tagId);
               taggedCount += 1;
             }
@@ -134,16 +151,17 @@ export function mergeCollections(
         }
       }
 
-      const updateResult = moveStmt.run(targetId, srcId);
+      const updateResult = moveStmt.run(targetId, srcId, userId);
       movedCount += updateResult.changes;
-      deleteStmt.run(srcId);
+      deletedCollections += deleteStmt.run(srcId, userId).changes;
     }
 
-    return { movedCount, deletedCollections: validSources.length, taggedCount };
+    return { movedCount, deletedCollections, taggedCount };
   })();
 }
 
 export function convertCollectionsToTags(
+  userId: number,
   collectionIds: number[],
 ): { converted: number; bookmarksTagged: number } {
   if (collectionIds.length === 0) return { converted: 0, bookmarksTagged: 0 };
@@ -151,19 +169,18 @@ export function convertCollectionsToTags(
   return db.transaction(() => {
     let converted = 0;
     let bookmarksTagged = 0;
-    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ?');
-    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ?');
+    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ? AND user_id = ?');
+    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ? AND user_id = ?');
 
     for (const id of collectionIds) {
-      const col = getCollection(id);
+      const col = getCollection(userId, id);
       if (!col) continue;
 
       const tagName = normalizeTagName(col.name);
       if (tagName) {
-        const tagIds = ensureTagIds([tagName]);
-        const tagId = tagIds[0];
+        const tagId = ensureTagIds(userId, [tagName])[0];
         if (tagId) {
-          const rows = selectBookmarks.all(id) as Array<{ id: number }>;
+          const rows = selectBookmarks.all(id, userId) as Array<{ id: number }>;
           for (const row of rows) {
             linkTagStmt.run(row.id, tagId);
             bookmarksTagged += 1;
@@ -171,7 +188,7 @@ export function convertCollectionsToTags(
         }
       }
 
-      deleteStmt.run(id);
+      deleteStmt.run(id, userId);
       converted += 1;
     }
 
@@ -180,21 +197,22 @@ export function convertCollectionsToTags(
 }
 
 export function batchAssignBookmarksToCollection(
+  userId: number,
   bookmarkIds: number[],
   collectionId: number | null,
 ): number {
   if (bookmarkIds.length === 0) return 0;
-  if (collectionId !== null && !getCollection(collectionId)) {
+  if (collectionId !== null && !getCollection(userId, collectionId)) {
     throw notFound('Target collection not found.');
   }
 
   return db.transaction(() => {
     const stmt = db.prepare(
-      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE id = ?",
+      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?",
     );
     let count = 0;
     for (const id of bookmarkIds) {
-      const res = stmt.run(collectionId, id);
+      const res = stmt.run(collectionId, id, userId);
       count += res.changes;
     }
     return count;
@@ -207,17 +225,17 @@ export interface UncollectedDomainGroup {
   bookmarkIds: number[];
 }
 
-export function getUncollectedDomainStats(limit = 25): UncollectedDomainGroup[] {
+export function getUncollectedDomainStats(userId: number, limit = 25): UncollectedDomainGroup[] {
   const rows = db
     .prepare(
       `SELECT site_name AS domain, COUNT(*) AS count, GROUP_CONCAT(id) AS ids
          FROM bookmarks
-        WHERE collection_id IS NULL AND site_name != ''
+        WHERE user_id = ? AND collection_id IS NULL AND site_name != ''
         GROUP BY site_name
         ORDER BY count DESC
         LIMIT ?`,
     )
-    .all(limit) as Array<{ domain: string; count: number; ids: string }>;
+    .all(userId, limit) as Array<{ domain: string; count: number; ids: string }>;
 
   return rows.map((row) => ({
     domain: row.domain,
@@ -225,4 +243,3 @@ export function getUncollectedDomainStats(limit = 25): UncollectedDomainGroup[] 
     bookmarkIds: row.ids ? row.ids.split(',').map((s) => parseInt(s, 10)).filter(Number.isFinite) : [],
   }));
 }
-

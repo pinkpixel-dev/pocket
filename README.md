@@ -4,6 +4,8 @@ Pocket is a self-hosted bookmark manager for a NAS or home server. You paste a l
 
 It stores everything in a single SQLite file with cached images beside it, so a normal file backup captures your whole library. Nothing leaves your machine except the requests Pocket makes to fetch page metadata.
 
+Everyone who signs in gets their own library. If a few people share a NAS, they each get their own bookmarks, collections, tags and AI settings, and nobody can see anyone else's.
+
 I built it because browser bookmark bars stop being useful somewhere around 200 links, and most of the alternatives are either a hosted service or a full read-it-later platform. This one just saves links, organizes them, and finds them again.
 
 ![Pocket grid view](DOCS/images/grid-view.png)
@@ -31,10 +33,27 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - A tidy-up pass for a collection list that has gotten out of hand. It proposes merges, keeps the old names as tags, and you pick which ones to accept.
 - The same tidy-up for tags, which fold together by synonym and plural rather than by subject. Plus bulk select, merge and delete for tags you would rather sort out yourself.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
+- Accounts. The first person to open Pocket becomes the owner and can add everyone else from Settings. Each account is a separate library.
 
 ## What it does not do
 
-No accounts, no cloud sync, no page archiving, no screenshot rendering. Pocket has no login of its own, so it belongs on a trusted network or behind a reverse proxy that handles authentication. See [Access and security](#access-and-security).
+No cloud sync, no page archiving, no screenshot rendering, no sharing between accounts. There is no open sign-up either: the owner creates every account. See [Accounts](#accounts) and [Access and security](#access-and-security).
+
+## Accounts
+
+The first time you open Pocket it asks you to pick a username and password. That first account is the owner. If you already had a library before accounts existed, it belongs to that account, so finish setup from the machine you were using Pocket on and nothing moves.
+
+To add someone else, open Settings, go to "Your account", and use "Add someone" under "People on this Pocket". You set their starting password and tell them what it is, and they change it from the same screen. There is no self-service sign-up and no password reset by email, because Pocket has no way to send email and a home server does not need one. If someone forgets their password, the owner sets a new one from that list.
+
+What each account gets to itself:
+
+- Bookmarks, collections and tags. Two people can save the same link, and can each have a collection called "Reading", without colliding.
+- AI settings, including the OpenAI key. Nobody spends on anyone else's key.
+- The link health scan, which runs over your own library only.
+
+Removing an account deletes its bookmarks, collections and tags along with it. The owner account cannot be deleted, and nobody can delete the account they are signed in with.
+
+Sessions live in a cookie that is `HttpOnly` and `SameSite=Lax` and lasts 30 days. Changing your password signs out every other device. Behind HTTPS the cookie is marked `Secure` automatically, or you can force it with `POCKET_SECURE_COOKIES=1`.
 
 ## Filling in links with AI
 
@@ -48,7 +67,7 @@ For links you saved before that, use "Fill in with AI" in any card's menu.
 
 Two things worth knowing:
 
-- The key is stored as plain text in your Pocket database, which means it is also in your backups. If you would rather it never touched the database, set `POCKET_OPENAI_API_KEY` instead. The environment always wins, and Pocket then refuses to let the browser change it.
+- The key is stored as plain text in your Pocket database, which means it is also in your backups. If you would rather it never touched the database, set `POCKET_OPENAI_API_KEY` instead. That one is shared: every account can use it without pasting anything, and the bill lands on whoever owns the key. An account that pastes its own key uses that instead, and removing it falls back to the shared one.
 - Imported bookmarks are skipped. A browser export can be thousands of links, and filling all of them in automatically would be a bill you did not agree to. Run those one at a time from the card menu.
 
 Pocket sends the URL, the site name, whatever title and description it already has, about 1500 characters of the page's own text, and your existing collections and tags. Each collection goes over with a couple of the titles already filed under it, because a name on its own is not much to judge a fit by. The instruction is to reuse a collection whenever the link belongs to that subject area, and to only name a new one when nothing on the list is close. It is explicitly told not to create a narrower version of a collection you already have, because that is how you end up with "AI", "AI music" and "AI prompting" sitting next to each other. The specific bit goes in the tags instead. Names are also capped at one or two words and 18 characters, so they fit the sidebar: you get "UI" and a `templates` tag rather than "UI Component libraries & templates". It sends `store: false`, so OpenAI keeps no copy.
@@ -189,14 +208,17 @@ Every setting is an environment variable, and every one has a working default. Y
 | `POCKET_MAX_UPLOAD_BYTES` | `33554432` | Largest bookmark file you can import |
 | `POCKET_MAX_COVER_BYTES` | `10485760` | Largest cover image you can upload |
 | `POCKET_USER_AGENT` | a Pocket-identifying string | User agent sent when fetching pages |
-| `POCKET_OPENAI_API_KEY` | unset | An OpenAI key. Setting it turns on AI filling and stops the browser from changing the key |
+| `POCKET_OPENAI_API_KEY` | unset | A shared OpenAI key every account can use. An account that saves its own key uses that instead |
 | `POCKET_OPENAI_BASE_URL` | `https://api.openai.com/v1` | Point this at an OpenAI-compatible endpoint if you run one |
 | `POCKET_OPENAI_TIMEOUT_MS` | `60000` | How long to wait for a model to answer |
 | `POCKET_AI_EXCERPT_CHARS` | `1500` | How much page text goes into the prompt |
+| `POCKET_SECURE_COOKIES` | follows the request | Force the session cookie's `Secure` flag on or off. Normally Pocket follows `X-Forwarded-Proto` |
 
 ## Access and security
 
-Pocket is built for a single person on a trusted LAN. It has no authentication. Do not put it on the open internet as-is. If you need it from outside the house, put it behind a reverse proxy with auth, or reach it over a private network like Tailscale or WireGuard.
+Pocket has its own sign-in, and every API route except the health check requires it. Cached preview images require it too. Passwords are hashed with scrypt, and the session cookie is stored as a SHA-256 hash, so a stolen database backup gives up neither. Ten failed sign-ins from one address in fifteen minutes gets that address a 429.
+
+That is enough to keep housemates out of each other's bookmarks. It is not enough to put on the open internet on its own, because Pocket serves plain HTTP and has no rate limiting beyond the sign-in throttle. If you need it from outside the house, put it behind a reverse proxy that terminates TLS, or reach it over a private network like Tailscale or WireGuard.
 
 The one thing Pocket does defend against is server-side request forgery, because saving a bookmark makes the server fetch a URL you gave it. Outbound requests go through an agent that resolves hostnames and refuses to connect to loopback, private, link-local, carrier-grade NAT, and reserved addresses. The check runs at connect time rather than before the request, so a DNS answer that changes in between still cannot get through, and literal IP addresses are checked separately since they never hit DNS at all. Redirects are followed by hand, one hop at a time, and each hop is re-checked. Responses are capped by size and downloaded images are identified by their actual bytes rather than the `Content-Type` header the server claimed.
 

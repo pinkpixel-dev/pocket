@@ -15,6 +15,13 @@ const { parseBookmarkHtml, importLinks } = await import('./transfer.js');
 const { probeUrl } = await import('../lib/http.js');
 const { startLibraryAudit, getAuditStatus } = await import('./audit.js');
 
+
+/**
+ * Every library table is scoped to an account now. Migration 4 seeds the owner
+ * row, so these tests file everything under it.
+ */
+const OWNER = 1;
+
 test.after(() => {
   try {
     db.close();
@@ -77,7 +84,7 @@ test('importLinks filters by year correctly', async () => {
   ];
 
   // Exact match 2024
-  const summaryExact = await importLinks(sampleLinks, {
+  const summaryExact = await importLinks(OWNER, sampleLinks, {
     fetchMetadata: false,
     yearFilter: 2024,
     yearMode: 'exact',
@@ -87,7 +94,7 @@ test('importLinks filters by year correctly', async () => {
   assert.equal(summaryExact.yearFiltered, 2);
 
   // Since 2024 (should match 2024 and 2025, but 2024 is now duplicate)
-  const summarySince = await importLinks(sampleLinks, {
+  const summarySince = await importLinks(OWNER, sampleLinks, {
     fetchMetadata: false,
     yearFilter: 2024,
     yearMode: 'since',
@@ -106,13 +113,13 @@ test('probeUrl handles unreachable URLs gracefully', async () => {
 });
 
 test('startLibraryAudit tracks status and completes', async () => {
-  const initial = startLibraryAudit();
+  const initial = startLibraryAudit(OWNER);
   assert.equal(typeof initial.running, 'boolean');
 
   // Wait a moment for background worker to process the 2 test links in DB
   await new Promise((resolve) => setTimeout(resolve, 1500));
 
-  const status = getAuditStatus();
+  const status = getAuditStatus(OWNER);
   assert.equal(typeof status.total, 'number');
   assert.equal(typeof status.checked, 'number');
   assert.equal(typeof status.broken, 'number');

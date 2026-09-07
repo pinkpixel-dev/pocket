@@ -43,11 +43,11 @@ export interface AiJsonRequest {
 
 /**
  * One structured-output call to the Responses API. Every organizing feature
- * goes through here, so they all fail the same way and none of them can
- * quietly send the key somewhere else.
+ * goes through here, so they all fail the same way, and the key can only ever
+ * be the one belonging to the account that asked.
  */
-export async function callAiJson<T>(request: AiJsonRequest): Promise<T> {
-  const ai = readAiConfig();
+export async function callAiJson<T>(userId: number, request: AiJsonRequest): Promise<T> {
+  const ai = readAiConfig(userId);
   if (!ai.apiKey) throw new AiRequestError('No OpenAI API key is configured.');
 
   const model = findModel(ai.model);

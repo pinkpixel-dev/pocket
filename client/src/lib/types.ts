@@ -65,11 +65,29 @@ export interface AiSettings {
   configured: boolean;
   keySource: 'env' | 'settings' | 'none';
   keyHint: string | null;
+  /** True when the operator set a shared key this account can fall back to. */
+  sharedKeyAvailable: boolean;
   model: string;
   reasoningEffort: ReasoningEffort;
   autoRun: boolean;
   createCollections: boolean;
   models: AiModel[];
+}
+
+export interface SessionUser {
+  id: number;
+  username: string;
+  displayName: string;
+  /** The owner is the only account that can add or remove other accounts. */
+  isOwner: boolean;
+  createdAt: string;
+  bookmarkCount: number;
+}
+
+export interface SessionState {
+  /** True on a fresh install, before anyone has claimed the owner account. */
+  needsSetup: boolean;
+  user: SessionUser | null;
 }
 
 export interface ImportSummary {

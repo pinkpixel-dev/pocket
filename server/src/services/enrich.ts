@@ -51,11 +51,15 @@ const markFailed = db.prepare(
           metadata_error = @error,
           metadata_fetched_at = datetime('now'),
           updated_at = datetime('now')
-    WHERE id = @id`,
+    WHERE id = @id AND user_id = @userId`,
 );
 
-export async function enrichBookmark(id: number, options: EnrichOptions = {}): Promise<EnrichResult> {
-  const row = getBookmarkRow(id);
+export async function enrichBookmark(
+  userId: number,
+  id: number,
+  options: EnrichOptions = {},
+): Promise<EnrichResult> {
+  const row = getBookmarkRow(userId, id);
   if (!row) return { bookmark: null, excerpt: '' };
 
   let metadata;
@@ -66,14 +70,14 @@ export async function enrichBookmark(id: number, options: EnrichOptions = {}): P
       error instanceof MetadataError || error instanceof Error
         ? error.message
         : 'The page could not be read.';
-    markFailed.run({ id, error: message.slice(0, 400) });
-    return { bookmark: getBookmark(id), excerpt: '' };
+    markFailed.run({ id, userId, error: message.slice(0, 400) });
+    return { bookmark: getBookmark(userId, id), excerpt: '' };
   }
 
   const previewPath = await firstUsableImage(metadata.imageCandidates, 'preview');
   const faviconPath = await firstUsableImage(metadata.faviconCandidates, 'favicon');
 
-  const stillThere = getBookmarkRow(id);
+  const stillThere = getBookmarkRow(userId, id);
   if (!stillThere) return { bookmark: null, excerpt: metadata.excerpt };
 
   const title = options.overwriteText || !stillThere.title ? metadata.title || stillThere.title : stillThere.title;
@@ -95,9 +99,10 @@ export async function enrichBookmark(id: number, options: EnrichOptions = {}): P
             metadata_error = NULL,
             metadata_fetched_at = datetime('now'),
             updated_at = datetime('now')
-      WHERE id = @id`,
+      WHERE id = @id AND user_id = @userId`,
   ).run({
     id,
+    userId,
     title,
     description,
     siteName: metadata.siteName || stillThere.site_name,
@@ -113,5 +118,5 @@ export async function enrichBookmark(id: number, options: EnrichOptions = {}): P
     await releaseIfUnused(stillThere.favicon_path, id);
   }
 
-  return { bookmark: getBookmark(id), excerpt: metadata.excerpt };
+  return { bookmark: getBookmark(userId, id), excerpt: metadata.excerpt };
 }

@@ -10,12 +10,12 @@ import {
   type ReasoningEffort,
 } from '../lib/ai-models.js';
 
-const readSetting = db.prepare('SELECT value FROM settings WHERE key = ?');
+const readSetting = db.prepare('SELECT value FROM settings WHERE user_id = ? AND key = ?');
 const writeSetting = db.prepare(
-  `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+  `INSERT INTO settings (user_id, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
 );
-const clearSetting = db.prepare('DELETE FROM settings WHERE key = ?');
+const clearSetting = db.prepare('DELETE FROM settings WHERE user_id = ? AND key = ?');
 
 const KEYS = {
   apiKey: 'ai.apiKey',
@@ -25,12 +25,12 @@ const KEYS = {
   createCollections: 'ai.createCollections',
 } as const;
 
-function get(key: string): string | null {
-  return (readSetting.get(key) as { value: string } | undefined)?.value ?? null;
+function get(userId: number, key: string): string | null {
+  return (readSetting.get(userId, key) as { value: string } | undefined)?.value ?? null;
 }
 
-function getBool(key: string, fallback: boolean): boolean {
-  const raw = get(key);
+function getBool(userId: number, key: string, fallback: boolean): boolean {
+  const raw = get(userId, key);
   return raw === null ? fallback : raw === '1';
 }
 
@@ -44,30 +44,32 @@ export interface AiConfig {
 }
 
 /**
- * The environment wins over the stored key, so an operator who sets one in
- * compose cannot have it silently replaced from the browser.
+ * `POCKET_OPENAI_API_KEY` is the house key: every account can use it without
+ * pasting anything. A key someone saves in their own Settings wins over it, so
+ * one person on the NAS can spend on their own account instead of the
+ * operator's. Everything else here has always been per-account by definition.
  */
-export function readAiConfig(): AiConfig {
+export function readAiConfig(userId: number): AiConfig {
   const envKey = config.openai.apiKey;
-  const storedKey = get(KEYS.apiKey);
-  const apiKey = envKey || storedKey || null;
+  const storedKey = get(userId, KEYS.apiKey);
+  const apiKey = storedKey || envKey || null;
 
-  const modelId = get(KEYS.model) ?? DEFAULT_MODEL;
+  const modelId = get(userId, KEYS.model) ?? DEFAULT_MODEL;
   const model = findModel(modelId) ?? findModel(DEFAULT_MODEL)!;
 
   return {
     apiKey,
-    keySource: envKey ? 'env' : storedKey ? 'settings' : 'none',
+    keySource: storedKey ? 'settings' : envKey ? 'env' : 'none',
     model: model.id,
-    reasoningEffort: coerceEffort(model, get(KEYS.effort) ?? DEFAULT_EFFORT),
-    autoRun: getBool(KEYS.autoRun, true),
-    createCollections: getBool(KEYS.createCollections, true),
+    reasoningEffort: coerceEffort(model, get(userId, KEYS.effort) ?? DEFAULT_EFFORT),
+    autoRun: getBool(userId, KEYS.autoRun, true),
+    createCollections: getBool(userId, KEYS.createCollections, true),
   };
 }
 
 /** The single gate the rest of the app checks. No key, no feature. */
-export function isAiConfigured(): boolean {
-  return readAiConfig().apiKey !== null;
+export function isAiConfigured(userId: number): boolean {
+  return readAiConfig(userId).apiKey !== null;
 }
 
 /** Enough of the key to recognise it, never enough to use it. */
@@ -80,6 +82,8 @@ export interface AiSettingsPublic {
   configured: boolean;
   keySource: AiConfig['keySource'];
   keyHint: string | null;
+  /** True when the operator set a shared key this account can fall back to. */
+  sharedKeyAvailable: boolean;
   model: string;
   reasoningEffort: ReasoningEffort;
   autoRun: boolean;
@@ -87,12 +91,13 @@ export interface AiSettingsPublic {
   models: Array<{ id: string; note: string; efforts: ReasoningEffort[] }>;
 }
 
-export function publicAiSettings(): AiSettingsPublic {
-  const ai = readAiConfig();
+export function publicAiSettings(userId: number): AiSettingsPublic {
+  const ai = readAiConfig(userId);
   return {
     configured: ai.apiKey !== null,
     keySource: ai.keySource,
     keyHint: hint(ai.apiKey),
+    sharedKeyAvailable: config.openai.apiKey !== '',
     model: ai.model,
     reasoningEffort: ai.reasoningEffort,
     autoRun: ai.autoRun,
@@ -110,7 +115,7 @@ export interface AiSettingsInput {
   createCollections?: boolean;
 }
 
-export function updateAiSettings(input: AiSettingsInput): AiSettingsPublic {
+export function updateAiSettings(userId: number, input: AiSettingsInput): AiSettingsPublic {
   if (input.model !== undefined && !findModel(input.model)) {
     throw badRequest(`Pocket does not know the model "${input.model}".`);
   }
@@ -118,16 +123,16 @@ export function updateAiSettings(input: AiSettingsInput): AiSettingsPublic {
   db.transaction(() => {
     if (input.apiKey !== undefined) {
       const key = input.apiKey.trim();
-      if (key) writeSetting.run(KEYS.apiKey, key);
-      else clearSetting.run(KEYS.apiKey);
+      if (key) writeSetting.run(userId, KEYS.apiKey, key);
+      else clearSetting.run(userId, KEYS.apiKey);
     }
-    if (input.model !== undefined) writeSetting.run(KEYS.model, input.model);
-    if (input.reasoningEffort !== undefined) writeSetting.run(KEYS.effort, input.reasoningEffort);
-    if (input.autoRun !== undefined) writeSetting.run(KEYS.autoRun, input.autoRun ? '1' : '0');
+    if (input.model !== undefined) writeSetting.run(userId, KEYS.model, input.model);
+    if (input.reasoningEffort !== undefined) writeSetting.run(userId, KEYS.effort, input.reasoningEffort);
+    if (input.autoRun !== undefined) writeSetting.run(userId, KEYS.autoRun, input.autoRun ? '1' : '0');
     if (input.createCollections !== undefined) {
-      writeSetting.run(KEYS.createCollections, input.createCollections ? '1' : '0');
+      writeSetting.run(userId, KEYS.createCollections, input.createCollections ? '1' : '0');
     }
   })();
 
-  return publicAiSettings();
+  return publicAiSettings(userId);
 }

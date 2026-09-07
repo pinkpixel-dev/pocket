@@ -18,26 +18,46 @@ interface BookmarkAuditRow {
   metadata_error: string | null;
 }
 
-let running = false;
-let cancelRequested = false;
-let total = 0;
-let checked = 0;
-let broken = 0;
-let lastRunAt: string | null = null;
+interface AuditState {
+  running: boolean;
+  cancelRequested: boolean;
+  total: number;
+  checked: number;
+  broken: number;
+  lastRunAt: string | null;
+}
 
-export function getAuditStatus(): AuditStatus {
+/**
+ * One scan per account, tracked separately. A shared counter would let one
+ * person's scan overwrite the progress bar someone else is watching, and would
+ * let either of them cancel the other's run.
+ */
+const states = new Map<number, AuditState>();
+
+function stateFor(userId: number): AuditState {
+  let state = states.get(userId);
+  if (!state) {
+    state = { running: false, cancelRequested: false, total: 0, checked: 0, broken: 0, lastRunAt: null };
+    states.set(userId, state);
+  }
+  return state;
+}
+
+export function getAuditStatus(userId: number): AuditStatus {
+  const state = stateFor(userId);
   return {
-    running,
-    total,
-    checked,
-    broken,
-    lastRunAt,
+    running: state.running,
+    total: state.total,
+    checked: state.checked,
+    broken: state.broken,
+    lastRunAt: state.lastRunAt,
   };
 }
 
-export function cancelLibraryAudit(): boolean {
-  if (!running) return false;
-  cancelRequested = true;
+export function cancelLibraryAudit(userId: number): boolean {
+  const state = stateFor(userId);
+  if (!state.running) return false;
+  state.cancelRequested = true;
   return true;
 }
 
@@ -49,7 +69,7 @@ const markAuditFailed = db.prepare(
           metadata_error = @error,
           metadata_fetched_at = datetime('now'),
           updated_at = datetime('now')
-    WHERE id = @id`,
+    WHERE id = @id AND user_id = @userId`,
 );
 
 const markAuditRecovered = db.prepare(
@@ -58,51 +78,52 @@ const markAuditRecovered = db.prepare(
           metadata_error = NULL,
           metadata_fetched_at = datetime('now'),
           updated_at = datetime('now')
-    WHERE id = @id`,
+    WHERE id = @id AND user_id = @userId`,
 );
 
-async function runAudit(): Promise<void> {
+async function runAudit(userId: number, state: AuditState): Promise<void> {
   const bookmarks = db
     .prepare(
       `SELECT id, url, preview_path, metadata_status, metadata_error
          FROM bookmarks
+        WHERE user_id = ?
         ORDER BY id ASC`,
     )
-    .all() as BookmarkAuditRow[];
+    .all(userId) as BookmarkAuditRow[];
 
-  total = bookmarks.length;
-  checked = 0;
-  broken = 0;
+  state.total = bookmarks.length;
+  state.checked = 0;
+  state.broken = 0;
 
   let cursor = 0;
 
   async function worker(): Promise<void> {
     while (cursor < bookmarks.length) {
-      if (cancelRequested) break;
+      if (state.cancelRequested) break;
       const index = cursor++;
       const item = bookmarks[index];
       if (!item) break;
 
       try {
         const probe = await probeUrl(item.url);
-        if (cancelRequested) break;
+        if (state.cancelRequested) break;
 
         if (!probe.alive) {
-          broken += 1;
+          state.broken += 1;
           const errorMsg = (probe.error ?? 'Link unreachable').slice(0, 400);
-          markAuditFailed.run({ id: item.id, error: errorMsg });
+          markAuditFailed.run({ id: item.id, userId, error: errorMsg });
         } else if (item.metadata_status === 'failed') {
           // Link recovered
           const restoredStatus: MetadataStatus = item.preview_path ? 'ok' : 'partial';
-          markAuditRecovered.run({ id: item.id, status: restoredStatus });
+          markAuditRecovered.run({ id: item.id, userId, status: restoredStatus });
         }
       } catch {
-        if (!cancelRequested) {
-          broken += 1;
-          markAuditFailed.run({ id: item.id, error: 'Could not connect to URL' });
+        if (!state.cancelRequested) {
+          state.broken += 1;
+          markAuditFailed.run({ id: item.id, userId, error: 'Could not connect to URL' });
         }
       } finally {
-        checked += 1;
+        state.checked += 1;
       }
     }
   }
@@ -111,23 +132,29 @@ async function runAudit(): Promise<void> {
   await Promise.all(workers);
 }
 
-export function startLibraryAudit(): AuditStatus {
-  if (running) return getAuditStatus();
+export function startLibraryAudit(userId: number): AuditStatus {
+  const state = stateFor(userId);
+  if (state.running) return getAuditStatus(userId);
 
-  running = true;
-  cancelRequested = false;
-  checked = 0;
-  broken = 0;
+  state.running = true;
+  state.cancelRequested = false;
+  state.checked = 0;
+  state.broken = 0;
 
   // Run in background without blocking caller
-  void runAudit()
+  void runAudit(userId, state)
     .catch((error: unknown) => {
       console.error('[pocket] Library audit error:', error);
     })
     .finally(() => {
-      running = false;
-      lastRunAt = new Date().toISOString();
+      state.running = false;
+      state.lastRunAt = new Date().toISOString();
     });
 
-  return getAuditStatus();
+  return getAuditStatus(userId);
+}
+
+/** Called when an account is removed, so its scan state does not outlive it. */
+export function forgetAuditState(userId: number): void {
+  states.delete(userId);
 }

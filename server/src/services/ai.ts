@@ -77,8 +77,8 @@ const sampleTitles = db.prepare(
     LIMIT 3`,
 );
 
-function describeCollections(): string {
-  const collections = listCollections();
+function describeCollections(userId: number): string {
+  const collections = listCollections(userId);
   if (collections.length === 0) return '(none yet)';
 
   return collections
@@ -96,10 +96,15 @@ function describeCollections(): string {
     .join('\n');
 }
 
-function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boolean): string {
+function buildPrompt(
+  userId: number,
+  row: BookmarkRow,
+  excerpt: string,
+  canCreateCollection: boolean,
+): string {
   // listTags is ordered by use, so this is the part of the vocabulary that is
   // actually shared rather than 300 one-off tags in alphabetical order.
-  const tags = listTags().slice(0, 80);
+  const tags = listTags(userId).slice(0, 80);
 
   const collectionRule = canCreateCollection
     ? [
@@ -128,7 +133,7 @@ function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boo
     excerpt || '(the page gave up no readable text; work from the URL and title alone)',
     '',
     'Collections already in this library',
-    describeCollections(),
+    describeCollections(userId),
     '',
     'Tags already in this library, most used first',
     tags.length ? tags.map((tag) => `${tag.name} (${tag.bookmarkCount})`).join(', ') : '(none yet)',
@@ -163,8 +168,8 @@ function errorMessage(status: number, payload: unknown): string {
   return `OpenAI answered with HTTP ${status}.`;
 }
 
-async function askModel(prompt: string): Promise<Suggestion> {
-  const ai = readAiConfig();
+async function askModel(userId: number, prompt: string): Promise<Suggestion> {
+  const ai = readAiConfig(userId);
   if (!ai.apiKey) throw new AiError('No OpenAI key is set.');
 
   const model = findModel(ai.model);
@@ -226,11 +231,11 @@ const setStatus = db.prepare(
       SET ai_status = @status,
           ai_error = @error,
           ai_applied_at = CASE WHEN @status = 'pending' THEN ai_applied_at ELSE datetime('now') END
-    WHERE id = @id`,
+    WHERE id = @id AND user_id = @userId`,
 );
 
-export function markAiPending(id: number): void {
-  setStatus.run({ id, status: 'pending' as AiStatus, error: null });
+export function markAiPending(userId: number, id: number): void {
+  setStatus.run({ id, userId, status: 'pending' as AiStatus, error: null });
 }
 
 /**
@@ -238,9 +243,14 @@ export function markAiPending(id: number): void {
  * user already has survives untouched, which is what makes running this
  * automatically after the metadata fetch safe.
  */
-function apply(row: BookmarkRow, suggestion: Suggestion, canCreateCollection: boolean): boolean {
+function apply(
+  userId: number,
+  row: BookmarkRow,
+  suggestion: Suggestion,
+  canCreateCollection: boolean,
+): boolean {
   const fields: string[] = [];
-  const params: Record<string, unknown> = { id: row.id };
+  const params: Record<string, unknown> = { id: row.id, userId };
 
   if (!row.title && suggestion.title) {
     fields.push('title = @title');
@@ -252,8 +262,9 @@ function apply(row: BookmarkRow, suggestion: Suggestion, canCreateCollection: bo
   }
 
   if (row.collection_id === null && suggestion.collection) {
-    const existing = findCollectionByName(suggestion.collection);
-    const collection = existing ?? (canCreateCollection ? createCollection({ name: suggestion.collection }) : null);
+    const existing = findCollectionByName(userId, suggestion.collection);
+    const collection =
+      existing ?? (canCreateCollection ? createCollection(userId, { name: suggestion.collection }) : null);
     if (collection) {
       fields.push('collection_id = @collectionId');
       params.collectionId = collection.id;
@@ -271,10 +282,11 @@ function apply(row: BookmarkRow, suggestion: Suggestion, canCreateCollection: bo
   db.transaction(() => {
     if (fields.length) {
       db.prepare(
-        `UPDATE bookmarks SET ${fields.join(', ')}, updated_at = datetime('now') WHERE id = @id`,
+        `UPDATE bookmarks SET ${fields.join(', ')}, updated_at = datetime('now')
+          WHERE id = @id AND user_id = @userId`,
       ).run(params);
     }
-    if (addTags) setBookmarkTags(row.id, suggestion.tags);
+    if (addTags) setBookmarkTags(userId, row.id, suggestion.tags);
   })();
 
   return true;
@@ -289,14 +301,18 @@ export interface AiFillOptions {
  * Fills whatever the metadata fetch could not. Returns the bookmark, or null
  * if it was deleted while the request was in flight.
  */
-export async function fillWithAi(id: number, options: AiFillOptions = {}): Promise<Bookmark | null> {
-  const row = getBookmarkRow(id);
+export async function fillWithAi(
+  userId: number,
+  id: number,
+  options: AiFillOptions = {},
+): Promise<Bookmark | null> {
+  const row = getBookmarkRow(userId, id);
   if (!row) return null;
 
-  const ai = readAiConfig();
+  const ai = readAiConfig(userId);
   if (!ai.apiKey) {
-    setStatus.run({ id, status: 'skipped' as AiStatus, error: null });
-    return getBookmark(id);
+    setStatus.run({ id, userId, status: 'skipped' as AiStatus, error: null });
+    return getBookmark(userId, id);
   }
 
   const hasTags =
@@ -305,8 +321,8 @@ export async function fillWithAi(id: number, options: AiFillOptions = {}): Promi
     }).count > 0;
 
   if (row.title && row.description && row.collection_id !== null && hasTags) {
-    setStatus.run({ id, status: 'skipped' as AiStatus, error: null });
-    return getBookmark(id);
+    setStatus.run({ id, userId, status: 'skipped' as AiStatus, error: null });
+    return getBookmark(userId, id);
   }
 
   let excerpt = options.excerpt ?? '';
@@ -320,16 +336,16 @@ export async function fillWithAi(id: number, options: AiFillOptions = {}): Promi
   }
 
   try {
-    const suggestion = await askModel(buildPrompt(row, excerpt, ai.createCollections));
-    const fresh = getBookmarkRow(id);
+    const suggestion = await askModel(userId, buildPrompt(userId, row, excerpt, ai.createCollections));
+    const fresh = getBookmarkRow(userId, id);
     if (!fresh) return null;
 
-    const changed = apply(fresh, suggestion, ai.createCollections);
-    setStatus.run({ id, status: (changed ? 'ok' : 'skipped') satisfies AiStatus, error: null });
+    const changed = apply(userId, fresh, suggestion, ai.createCollections);
+    setStatus.run({ id, userId, status: (changed ? 'ok' : 'skipped') satisfies AiStatus, error: null });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'The AI step failed.';
-    setStatus.run({ id, status: 'failed' as AiStatus, error: message.slice(0, 400) });
+    setStatus.run({ id, userId, status: 'failed' as AiStatus, error: message.slice(0, 400) });
   }
 
-  return getBookmark(id);
+  return getBookmark(userId, id);
 }

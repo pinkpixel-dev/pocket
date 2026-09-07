@@ -90,8 +90,8 @@ function describe(collection: Collection): string {
  * from which "Creative licensing" and "Open source licensing" obviously want
  * to be one shelf called Licensing.
  */
-export async function suggestCollectionCleanup(): Promise<CleanupPlan> {
-  const collections = listCollections();
+export async function suggestCollectionCleanup(userId: number): Promise<CleanupPlan> {
+  const collections = listCollections(userId);
   const singletonCount = collections.filter((item) => item.bookmarkCount <= 1).length;
 
   if (collections.length < 2) {
@@ -117,7 +117,7 @@ export async function suggestCollectionCleanup(): Promise<CleanupPlan> {
 
   const parsed = await callAiJson<{
     actions?: Array<{ kind?: string; target?: string; sources?: string[]; reason?: string }>;
-  }>({
+  }>(userId, {
     instructions: CLEANUP_SYSTEM_PROMPT,
     input,
     schemaName: 'collection_cleanup',
@@ -229,8 +229,8 @@ const TAG_CLEANUP_SCHEMA = {
  * collections drift into sub-topics, tags drift into synonyms and plurals, so
  * this one is mostly looking for words that mean the same thing.
  */
-export async function suggestTagCleanup(): Promise<TagCleanupPlan> {
-  const tags = listTags();
+export async function suggestTagCleanup(userId: number): Promise<TagCleanupPlan> {
+  const tags = listTags(userId);
   const singletonCount = tags.filter((tag) => tag.bookmarkCount <= 1).length;
 
   if (tags.length < 2) {
@@ -260,7 +260,7 @@ export async function suggestTagCleanup(): Promise<TagCleanupPlan> {
 
   const parsed = await callAiJson<{
     actions?: Array<{ kind?: string; target?: string; sources?: string[]; reason?: string }>;
-  }>({
+  }>(userId, {
     instructions: TAG_SYSTEM_PROMPT,
     input,
     schemaName: 'tag_cleanup',

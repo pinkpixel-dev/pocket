@@ -97,7 +97,11 @@ export function parseBookmarkHtml(html: string): ParsedLink[] {
   return links;
 }
 
-export async function importLinks(links: ParsedLink[], options: ImportOptions): Promise<ImportSummary> {
+export async function importLinks(
+  userId: number,
+  links: ParsedLink[],
+  options: ImportOptions,
+): Promise<ImportSummary> {
   const summary: ImportSummary = {
     imported: 0,
     duplicates: 0,
@@ -148,7 +152,7 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
       try {
         const parsed = parseUrl(link.url);
         const normalized = normalizeUrl(parsed);
-        if (findByNormalizedUrl(normalized)) {
+        if (findByNormalizedUrl(userId, normalized)) {
           summary.duplicates += 1;
           continue;
         }
@@ -186,7 +190,9 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
   }
 
   const collectionIds = new Map<string, number>();
-  const existingNames = new Set(listCollections().map((collection) => collection.name.toLowerCase()));
+  const existingNames = new Set(
+    listCollections(userId).map((collection) => collection.name.toLowerCase()),
+  );
   const queue: number[] = [];
 
   for (const link of candidates) {
@@ -215,7 +221,7 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
       if (targetCollectionName) {
         const key = targetCollectionName.toLowerCase();
         if (!collectionIds.has(key)) {
-          const collection = ensureCollection(targetCollectionName);
+          const collection = ensureCollection(userId, targetCollectionName);
           collectionIds.set(key, collection.id);
           if (!existingNames.has(key)) {
             existingNames.add(key);
@@ -232,7 +238,7 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
         ]),
       );
 
-      const result = createBookmark({
+      const result = createBookmark(userId, {
         url: link.url,
         title: link.title,
         description: link.description,
@@ -257,7 +263,7 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
     }
   }
 
-  for (const id of queue) enqueueEnrich(id, {}, false);
+  for (const id of queue) enqueueEnrich(userId, id, {}, false);
   return summary;
 }
 
@@ -280,11 +286,13 @@ export interface PocketBackup {
   }>;
 }
 
-export function buildJsonBackup(): PocketBackup {
-  const collections = listCollections();
+export function buildJsonBackup(userId: number): PocketBackup {
+  const collections = listCollections(userId);
   const byId = new Map(collections.map((collection) => [collection.id, collection.name]));
 
-  const rows = db.prepare('SELECT * FROM bookmarks ORDER BY created_at ASC').all() as BookmarkRow[];
+  const rows = db
+    .prepare('SELECT * FROM bookmarks WHERE user_id = ? ORDER BY created_at ASC')
+    .all(userId) as BookmarkRow[];
   const tagsFor = db.prepare(
     `SELECT t.name FROM tags t JOIN bookmark_tags bt ON bt.tag_id = t.id
       WHERE bt.bookmark_id = ? ORDER BY t.name`,
@@ -295,7 +303,7 @@ export function buildJsonBackup(): PocketBackup {
     version: 1,
     exportedAt: new Date().toISOString(),
     collections: collections.map(({ name, description, color }) => ({ name, description, color })),
-    tags: listTags().map((tag) => tag.name),
+    tags: listTags(userId).map((tag) => tag.name),
     bookmarks: rows.map((row) => ({
       url: row.url,
       title: row.title,
@@ -347,8 +355,8 @@ const toEpochSeconds = (value: string): number => {
 };
 
 /** Writes the Netscape format so the file imports cleanly into any browser. */
-export function buildBookmarkHtml(): string {
-  const backup = buildJsonBackup();
+export function buildBookmarkHtml(userId: number): string {
+  const backup = buildJsonBackup(userId);
   const grouped = new Map<string, PocketBackup['bookmarks']>();
 
   for (const bookmark of backup.bookmarks) {

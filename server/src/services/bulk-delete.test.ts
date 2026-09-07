@@ -15,6 +15,13 @@ const { createBookmark, deleteBookmarks, listBookmarks, countBookmarks } = await
 );
 const { listTags } = await import('./tags.js');
 
+
+/**
+ * Every library table is scoped to an account now. Migration 4 seeds the owner
+ * row, so these tests file everything under it.
+ */
+const OWNER = 1;
+
 test.after(() => {
   try {
     db.close();
@@ -25,18 +32,18 @@ test.after(() => {
 });
 
 function save(url: string, tags: string[] = []): number {
-  return createBookmark({ url, tags, metadataStatus: 'failed' }).bookmark.id;
+  return createBookmark(OWNER, { url, tags, metadataStatus: 'failed' }).bookmark.id;
 }
 
 test('deleteBookmarks removes every id it is given', async () => {
   const ids = [save('https://one.example'), save('https://two.example'), save('https://three.example')];
 
-  const deleted = await deleteBookmarks(ids.slice(0, 2));
+  const deleted = await deleteBookmarks(OWNER, ids.slice(0, 2));
 
   assert.equal(deleted, 2);
-  assert.equal(countBookmarks(), 1);
+  assert.equal(countBookmarks(OWNER), 1);
   assert.deepEqual(
-    listBookmarks({}).items.map((item) => item.id),
+    listBookmarks(OWNER, {}).items.map((item) => item.id),
     [ids[2]],
   );
 });
@@ -45,17 +52,17 @@ test('deleteBookmarks skips ids that are already gone and prunes their tags', as
   const kept = save('https://kept.example', ['keep']);
   const doomed = save('https://doomed.example', ['throwaway']);
 
-  const deleted = await deleteBookmarks([doomed, 999_999]);
+  const deleted = await deleteBookmarks(OWNER, [doomed, 999_999]);
 
   assert.equal(deleted, 1);
-  const tagNames = listTags().map((tag) => tag.name);
+  const tagNames = listTags(OWNER).map((tag) => tag.name);
   assert.ok(tagNames.includes('keep'));
   assert.ok(!tagNames.includes('throwaway'));
-  assert.ok(listBookmarks({}).items.some((item) => item.id === kept));
+  assert.ok(listBookmarks(OWNER, {}).items.some((item) => item.id === kept));
 });
 
 test('deleteBookmarks on an empty list changes nothing', async () => {
-  const before = countBookmarks();
-  assert.equal(await deleteBookmarks([]), 0);
-  assert.equal(countBookmarks(), before);
+  const before = countBookmarks(OWNER);
+  assert.equal(await deleteBookmarks(OWNER, []), 0);
+  assert.equal(countBookmarks(OWNER), before);
 });

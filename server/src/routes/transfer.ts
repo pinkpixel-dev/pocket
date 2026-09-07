@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { config } from '../config.js';
 import { badRequest } from '../lib/errors.js';
+import { requireAuth, userIdOf } from '../middleware/auth.js';
 import {
   buildBookmarkHtml,
   buildJsonBackup,
@@ -12,6 +13,8 @@ import {
 
 export const transferRouter = Router();
 
+transferRouter.use(requireAuth);
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: config.maxUploadBytes, files: 1 },
@@ -21,18 +24,18 @@ function stamp(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-transferRouter.get('/export/html', (_req, res) => {
+transferRouter.get('/export/html', (req, res) => {
   res
     .type('text/html; charset=utf-8')
     .setHeader('content-disposition', `attachment; filename="pocket-bookmarks-${stamp()}.html"`);
-  res.send(buildBookmarkHtml());
+  res.send(buildBookmarkHtml(userIdOf(req)));
 });
 
-transferRouter.get('/export/json', (_req, res) => {
+transferRouter.get('/export/json', (req, res) => {
   res
     .type('application/json; charset=utf-8')
     .setHeader('content-disposition', `attachment; filename="pocket-backup-${stamp()}.json"`);
-  res.send(JSON.stringify(buildJsonBackup(), null, 2));
+  res.send(JSON.stringify(buildJsonBackup(userIdOf(req)), null, 2));
 });
 
 /** Accepts either a browser export or a Pocket JSON backup, sniffed by content. */
@@ -75,7 +78,7 @@ transferRouter.post('/import', upload.single('file'), async (req, res, next) => 
       if (links.length === 0) throw badRequest('No bookmarks were found in that file.');
     }
 
-    const summary = await importLinks(links, {
+    const summary = await importLinks(userIdOf(req), links, {
       fetchMetadata,
       skipDeadLinks,
       yearFilter,

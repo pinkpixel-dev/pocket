@@ -61,7 +61,9 @@ export function AiPanel({ settings, onChanged }: AiPanelProps) {
     return <div className="h-24 animate-pulse rounded-xl bg-raised" aria-label="Loading AI settings" />;
   }
 
-  const fromEnv = settings.keySource === 'env';
+  // A shared key from the environment is a fallback now, not a lock: an
+  // account can still paste its own so it spends on itself.
+  const usingSharedKey = settings.keySource === 'env';
   const model = settings.models.find((item) => item.id === settings.model);
 
   const save = async (input: Parameters<typeof api.updateAiSettings>[0], message: string) => {
@@ -106,9 +108,9 @@ export function AiPanel({ settings, onChanged }: AiPanelProps) {
             </span>
             <code className="font-mono text-[0.8125rem] text-ink-faint">{settings.keyHint}</code>
             <span className="ml-auto text-[0.75rem] text-ink-faint">
-              {fromEnv ? 'from POCKET_OPENAI_API_KEY' : 'stored in your database'}
+              {usingSharedKey ? 'shared, from POCKET_OPENAI_API_KEY' : 'yours, stored in the database'}
             </span>
-            {fromEnv ? null : (
+            {usingSharedKey ? null : (
               <Button
                 variant="ghost"
                 size="icon"
@@ -123,51 +125,61 @@ export function AiPanel({ settings, onChanged }: AiPanelProps) {
           </div>
         ) : null}
 
-        {fromEnv ? null : (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="min-w-0 flex-1">
-              <TextField
-                label={settings.configured ? 'Replace the key' : 'OpenAI API key'}
-                type="password"
-                autoComplete="off"
-                autoCapitalize="none"
-                spellCheck={false}
-                placeholder="sk-..."
-                value={keyDraft}
-                error={keyError}
-                onChange={(event) => setKeyDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void saveKey();
-                }}
-                hint={
-                  <>
-                    Stored as plain text in your Pocket database, which means it is also in your backups. Get
-                    one from{' '}
-                    <a
-                      href="https://platform.openai.com/api-keys"
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 text-accent hover:underline"
-                    >
-                      platform.openai.com
-                      <ExternalLink size={11} aria-hidden />
-                    </a>
-                  </>
-                }
-              />
-            </div>
-            <Button
-              variant="primary"
-              loading={busy}
-              disabled={!keyDraft.trim()}
-              onClick={() => void saveKey()}
-              className="sm:mb-7"
-            >
-              <KeyRound size={15} aria-hidden />
-              Save key
-            </Button>
+        {usingSharedKey ? (
+          <p className="text-[0.8125rem] text-ink-faint">
+            This key was set for everyone on this Pocket by whoever runs it, so requests are billed to their
+            OpenAI account. Paste your own below to use it instead. Removing yours later falls back to the
+            shared one.
+          </p>
+        ) : settings.sharedKeyAvailable ? (
+          <p className="text-[0.8125rem] text-ink-faint">
+            You are using your own key. Removing it falls back to the shared one set on this server.
+          </p>
+        ) : null}
+
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+          <div className="min-w-0 flex-1">
+            <TextField
+              label={settings.configured && !usingSharedKey ? 'Replace your key' : 'Your OpenAI API key'}
+              type="password"
+              autoComplete="off"
+              autoCapitalize="none"
+              spellCheck={false}
+              placeholder="sk-..."
+              value={keyDraft}
+              error={keyError}
+              onChange={(event) => setKeyDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void saveKey();
+              }}
+              hint={
+                <>
+                  Stored as plain text in your Pocket database, which means it is also in your backups. Get
+                  one from{' '}
+                  <a
+                    href="https://platform.openai.com/api-keys"
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex items-center gap-1 text-accent hover:underline"
+                  >
+                    platform.openai.com
+                    <ExternalLink size={11} aria-hidden />
+                  </a>
+                </>
+              }
+            />
           </div>
-        )}
+          <Button
+            variant="primary"
+            loading={busy}
+            disabled={!keyDraft.trim()}
+            onClick={() => void saveKey()}
+            className="sm:mb-7"
+          >
+            <KeyRound size={15} aria-hidden />
+            Save key
+          </Button>
+        </div>
       </div>
 
       {settings.configured ? (
