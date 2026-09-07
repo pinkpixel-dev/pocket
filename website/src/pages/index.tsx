@@ -8,9 +8,6 @@ import {
   Smartphone,
   ShieldCheck,
   FolderSync,
-  ArrowRight,
-  ExternalLink,
-  BookOpen,
   Layers,
   Sparkles,
 } from 'lucide-react';
@@ -32,9 +29,7 @@ export default function Home(): React.JSX.Element {
             <span className={styles.categoryBadge}>Local-First & Self-Hosted</span>
           </div>
 
-          <h1 className={styles.heroTitle}>
-            A private bookmark library for your NAS.
-          </h1>
+          <h1 className={styles.heroTitle}>A private bookmark library for your NAS.</h1>
 
           <p className={styles.heroSubtitle}>
             Save links with a single paste. Pocket fetches titles, favicons, and real page previews
@@ -47,16 +42,14 @@ export default function Home(): React.JSX.Element {
               to="/docs/getting-started/quickstart"
               className={`button button--primary ${styles.primaryCta}`}
             >
-              <span>Get Started</span>
-              <ArrowRight size={16} />
+              Get Started
             </Link>
 
             <Link
               to="/docs/intro"
               className={`button button--secondary ${styles.secondaryCta}`}
             >
-              <BookOpen size={16} />
-              <span>Read Documentation</span>
+              Read Documentation
             </Link>
 
             <a
@@ -65,8 +58,7 @@ export default function Home(): React.JSX.Element {
               rel="noopener noreferrer"
               className={`button button--secondary ${styles.githubCta}`}
             >
-              <span>GitHub</span>
-              <ExternalLink size={14} />
+              GitHub
             </a>
           </div>
 
