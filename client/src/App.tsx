@@ -11,6 +11,7 @@ import { CollectionDialog } from './components/CollectionDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { SelectionBar } from './components/SelectionBar';
 import { MoveDialog } from './components/MoveDialog';
+import { AiCategorizeDialog } from './components/AiCategorizeDialog';
 import { useToast } from './components/ui/Toaster';
 import { useLibrary } from './hooks/useLibrary';
 import { useSidebarWidth } from './hooks/useSidebarWidth';
@@ -99,6 +100,7 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
   const [moveTarget, setMoveTarget] = useState<Bookmark | null>(null);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [bulkMoving, setBulkMoving] = useState(false);
+  const [aiSortOpen, setAiSortOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Bookmark | null>(null);
   const [collectionDialog, setCollectionDialog] = useState<{ open: boolean; collection: Collection | null }>({
     open: false,
@@ -123,6 +125,7 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
     setSelectMode(false);
     setSelectedIds(new Set());
     setBulkMoveOpen(false);
+    setAiSortOpen(false);
   }, [library.route]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -159,17 +162,18 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
     setSelectedIds(new Set());
     setBulkConfirm(false);
     setBulkMoveOpen(false);
+    setAiSortOpen(false);
   }, []);
 
   // Escape leaves selection mode, the way it closes every other overlay here.
   useEffect(() => {
     if (!selectMode) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !bulkConfirm && !bulkMoveOpen) exitSelectMode();
+      if (event.key === 'Escape' && !bulkConfirm && !bulkMoveOpen && !aiSortOpen) exitSelectMode();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectMode, bulkConfirm, bulkMoveOpen, exitSelectMode]);
+  }, [selectMode, bulkConfirm, bulkMoveOpen, aiSortOpen, exitSelectMode]);
 
   const selectAll = async () => {
     setSelectingAll(true);
@@ -667,6 +671,7 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
                 onClear={() => setSelectedIds(new Set())}
                 onMove={() => setBulkMoveOpen(true)}
                 moving={bulkMoving}
+                onSortAi={library.aiSettings?.configured ? () => setAiSortOpen(true) : undefined}
                 onDelete={() => setBulkConfirm(true)}
                 onExit={exitSelectMode}
                 onDismissBroken={library.route.kind === 'attention' ? handleBulkDismiss : undefined}
@@ -801,6 +806,17 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
           } else {
             void moveBookmark(collectionId, newCollectionName);
           }
+        }}
+      />
+
+      <AiCategorizeDialog
+        open={aiSortOpen}
+        bookmarkIds={aiSortOpen ? [...selectedIds] : undefined}
+        onClose={() => setAiSortOpen(false)}
+        onApplied={async () => {
+          setAiSortOpen(false);
+          exitSelectMode();
+          await library.reload();
         }}
       />
 

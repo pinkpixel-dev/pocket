@@ -169,7 +169,9 @@ export function AiCategorizeDialog({
       description={
         domainFilter
           ? `Uncollected bookmarks on ${domainFilter}`
-          : 'Pocket plans the collections first, then files everything into them.'
+          : bookmarkIds?.length
+            ? `Sorting ${pluralize(bookmarkIds.length, 'selected bookmark')}`
+            : 'Pocket plans the collections first, then files everything into them.'
       }
       footer={
         <>
@@ -200,7 +202,7 @@ export function AiCategorizeDialog({
     >
       {stage === 'planning' ? (
         <Working
-          title="Reading the unfiled bookmarks"
+          title={bookmarkIds?.length ? 'Reading the selected bookmarks' : 'Reading the unfiled bookmarks'}
           detail="Working out the smallest set of collections that covers them."
         />
       ) : stage === 'filing' ? (
@@ -220,7 +222,7 @@ export function AiCategorizeDialog({
       {stage === 'plan' && plan ? (
         plan.collections.length === 0 ? (
           <p className="py-8 text-center text-ink-muted">
-            {plan.totalUncollected === 0
+            {plan.totalUncollected === 0 && !bookmarkIds?.length
               ? 'Everything is filed already.'
               : 'No plan came back. Try again in a moment.'}
           </p>

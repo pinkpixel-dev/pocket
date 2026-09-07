@@ -1,4 +1,4 @@
-import { CheckCheck, CheckCircle2, FolderInput, Trash2, X } from 'lucide-react';
+import { CheckCheck, CheckCircle2, FolderInput, Sparkles, Trash2, X } from 'lucide-react';
 import { Button } from './ui/Button';
 import { pluralize } from '../lib/format';
 
@@ -13,6 +13,7 @@ interface SelectionBarProps {
   onClear: () => void;
   onMove?: () => void;
   moving?: boolean;
+  onSortAi?: () => void;
   onDelete: () => void;
   onExit: () => void;
   onDismissBroken?: () => void;
@@ -34,6 +35,7 @@ export function SelectionBar({
   onClear,
   onMove,
   moving = false,
+  onSortAi,
   onDelete,
   onExit,
   onDismissBroken,
@@ -85,6 +87,19 @@ export function SelectionBar({
         >
           <FolderInput size={15} aria-hidden />
           Move{count > 0 ? ` (${count})` : ''}
+        </Button>
+      ) : null}
+
+      {onSortAi ? (
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={onSortAi}
+          disabled={count === 0 || deleting || moving || dismissing}
+          title={count === 0 ? 'Pick a bookmark first' : `Sort ${pluralize(count, 'bookmark')} with AI`}
+        >
+          <Sparkles size={15} aria-hidden />
+          Sort with AI
         </Button>
       ) : null}
 

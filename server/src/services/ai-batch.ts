@@ -131,20 +131,21 @@ function countUncollected(userId: number): number {
   ).count;
 }
 
-function selectUncollected(
+function selectCandidates(
   userId: number,
   bookmarkIds: number[] | undefined,
   limit: number,
 ): BookmarkRow[] {
   if (Array.isArray(bookmarkIds) && bookmarkIds.length > 0) {
-    const placeholders = bookmarkIds.map(() => '?').join(',');
+    const sampled = bookmarkIds.slice(0, limit);
+    const placeholders = sampled.map(() => '?').join(',');
     return db
       .prepare(
         `SELECT * FROM bookmarks
-          WHERE user_id = ? AND id IN (${placeholders}) AND collection_id IS NULL
+          WHERE user_id = ? AND id IN (${placeholders})
           ORDER BY id DESC LIMIT ?`,
       )
-      .all(userId, ...bookmarkIds, limit) as BookmarkRow[];
+      .all(userId, ...sampled, limit) as BookmarkRow[];
   }
 
   return db
@@ -192,8 +193,9 @@ export async function planCollections(
   userId: number,
   options: { bookmarkIds?: number[] } = {},
 ): Promise<CollectionPlan> {
+  const isSpecific = Array.isArray(options.bookmarkIds) && options.bookmarkIds.length > 0;
   const totalUncollected = countUncollected(userId);
-  const candidates = selectUncollected(userId, options.bookmarkIds, PLAN_SAMPLE);
+  const candidates = selectCandidates(userId, options.bookmarkIds, PLAN_SAMPLE);
 
   if (candidates.length === 0) {
     return { collections: [], bookmarkIds: [], totalUncollected };
@@ -256,9 +258,13 @@ export async function planCollections(
     throw new AiRequestError('The AI did not return any collections to file into.');
   }
 
+  const filingIds = isSpecific && options.bookmarkIds
+    ? options.bookmarkIds
+    : candidates.map((row) => row.id);
+
   return {
     collections,
-    bookmarkIds: candidates.map((row) => row.id),
+    bookmarkIds: filingIds,
     totalUncollected,
   };
 }
@@ -274,13 +280,14 @@ export async function suggestBatchCollections(
   userId: number,
   options: BatchCategorizeOptions = {},
 ): Promise<AiBatchResult> {
+  const isSpecificIds = Array.isArray(options.bookmarkIds) && options.bookmarkIds.length > 0;
   const totalUncollected = countUncollected(userId);
-  if (totalUncollected === 0) {
+  if (!isSpecificIds && totalUncollected === 0) {
     return { suggestions: [], totalUncollected: 0, processedCount: 0 };
   }
 
   const limit = Math.min(Math.max(Number(options.limit) || 30, 1), ASSIGN_LIMIT);
-  const candidates = selectUncollected(userId, options.bookmarkIds, limit);
+  const candidates = selectCandidates(userId, options.bookmarkIds, limit);
   if (candidates.length === 0) {
     return { suggestions: [], totalUncollected, processedCount: 0 };
   }

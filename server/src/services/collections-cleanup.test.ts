@@ -248,6 +248,31 @@ test('applyBatchCategorization creates collections, assigns bookmarks, and links
   assert.ok(updated.tags.includes('tech'));
 });
 
+test('applyBatchCategorization re-sorts existing collected bookmarks', () => {
+  const initialCol = createCollection(OWNER, { name: 'Old Shelf' });
+  const bm = createBookmark(OWNER, {
+    url: 'https://react.example',
+    title: 'React Docs',
+    metadataStatus: 'manual',
+  });
+  batchAssignBookmarksToCollection(OWNER, [bm.bookmark.id], initialCol.id);
+  assert.equal(getBookmark(OWNER, bm.bookmark.id)?.collectionId, initialCol.id);
+
+  const result = applyBatchCategorization(OWNER, [
+    {
+      bookmarkId: bm.bookmark.id,
+      collectionName: 'Frontend',
+      tags: ['react'],
+    },
+  ]);
+
+  assert.equal(result.applied, 1);
+  const updated = getBookmark(OWNER, bm.bookmark.id)!;
+  const col = getCollection(OWNER, updated.collectionId!)!;
+  assert.equal(col.name, 'Frontend');
+  assert.ok(updated.tags.includes('react'));
+});
+
 test('mergeTags folds synonyms into one tag without duplicating links', () => {
   const first = createBookmark(OWNER, {
     url: 'https://llm.example/one',

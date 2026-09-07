@@ -8,6 +8,10 @@ All notable changes to Pocket are recorded here. This project follows [semantic 
 
 - Bulk move to collection is now available when selecting bookmarks. You can pick multiple bookmark cards or rows and file them into an existing collection, unfile them to No collection, or create a brand new collection directly from the move dialog
 
+### 🤖 AI
+
+- "Sort with AI" is now available in selection mode on the bookmarks page. Select unsorted bookmarks to organize them or pick already collected links to re-sort them, launching the interactive review dialog directly from the main view
+
 ## 2.1.2 - September 7, 2026
 
 ### 🎨 Cards
