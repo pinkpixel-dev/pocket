@@ -26,6 +26,7 @@ export function MergeCollectionsDialog({
   const toast = useToast();
   const [selectedTargetId, setSelectedTargetId] = useState<number | 'new' | null>(null);
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [keepNamesAsTags, setKeepNamesAsTags] = useState(true);
   const [busy, setBusy] = useState(false);
 
   const sourceIds = new Set(sourceCollections.map((c) => c.id));
@@ -60,6 +61,7 @@ export function MergeCollectionsDialog({
       const res = await api.mergeCollections(
         sourceCollections.map((c) => c.id),
         targetId,
+        { tagWithSourceNames: keepNamesAsTags },
       );
 
       toast.success(
@@ -145,7 +147,20 @@ export function MergeCollectionsDialog({
             >
               <Plus size={16} className="shrink-0 text-accent" aria-hidden />
               <span className="min-w-0 flex-1">Create new collection...</span>
-              {selectedTargetId === 'new' ? (
+              <label className="flex items-start gap-2.5 text-[0.8125rem] text-ink-muted">
+          <input
+            type="checkbox"
+            checked={keepNamesAsTags}
+            onChange={(e) => setKeepNamesAsTags(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--color-accent)]"
+          />
+          <span>
+            Keep the old collection names as tags, so nothing about a bookmark is lost when its
+            collection disappears.
+          </span>
+        </label>
+
+        {selectedTargetId === 'new' ? (
                 <Check size={16} className="shrink-0 text-accent" aria-hidden />
               ) : null}
             </button>

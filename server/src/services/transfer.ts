@@ -23,7 +23,7 @@ export interface ImportOptions {
   skipDeadLinks?: boolean;
   yearFilter?: number;
   yearMode?: 'exact' | 'since' | 'before';
-  folderStrategy?: 'hierarchy' | 'tags_only' | 'innermost';
+  folderStrategy?: 'hierarchy' | 'tags_only';
   defaultCollection?: string;
 }
 
@@ -199,11 +199,6 @@ export async function importLinks(links: ParsedLink[], options: ImportOptions): 
       if (strategy === 'tags_only') {
         targetCollectionName = options.defaultCollection?.trim() || null;
         extraTags.push(...path);
-      } else if (strategy === 'innermost') {
-        targetCollectionName =
-          (path.length > 0 ? (path[path.length - 1] ?? null) : null) ||
-          options.defaultCollection?.trim() ||
-          null;
       } else {
         // 'hierarchy' (default)
         if (path.length > 0) {

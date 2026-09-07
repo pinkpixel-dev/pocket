@@ -59,7 +59,8 @@ const SYSTEM_PROMPT = [
   'Answer only from what the page actually says. Never invent a fact about it.',
   'Titles are plain and specific. Descriptions are one or two sentences, factual, no sales language.',
   'Tags are lowercase, one or two words each, and reusable across many bookmarks. Prefer a tag the library already has over a new synonym.',
-  'Filing something in the wrong collection is worse than making a new one. A collection that collects unrelated things is useless.',
+  'Collections are broad subject areas, not topics. What makes a link specific belongs in its tags.',
+  'A library with a collection per link is not organized, it is a list with extra steps.',
 ].join(' ');
 
 /**
@@ -99,11 +100,11 @@ function buildPrompt(row: BookmarkRow, excerpt: string, canCreateCollection: boo
   const collectionRule = canCreateCollection
     ? [
         'Choosing the collection:',
-        '- Pick one from the list only when this link is about the same subject as the links already filed there. Judge by the subject, not by whether both are broadly technical.',
-        '- A near miss is worse than a new collection. Someone opening that collection later should not be surprised to find this link sitting in it.',
-        '- When nothing on the list actually fits, name a new one. Make it a broad subject that many future links will also fit, such as the field the link belongs to or the kind of thing it is. Do not name it after this one page.',
-        '- When you are torn between an existing collection and a new one, create the new one.',
-        '- Return an empty string only when you cannot tell what the link is about at all.',
+        '- Pick one from the list when this link belongs to the same subject area as what is filed there. Judge by the subject, not by whether both are broadly technical.',
+        '- Never propose a narrower version of a collection that already exists. A link about AI music goes in "AI" with the tag music, not in a new "AI music".',
+        '- When you are torn between an existing collection and a new one, use the existing one.',
+        '- Only name a new collection when nothing on the list is even close, and name it broadly enough that dozens of future links will also belong there. Never name it after this one page, a brand, or a single product.',
+        '- Return an empty string when nothing fits and no broad name is warranted. Staying unfiled with good tags is a fine outcome.',
       ].join('\n')
     : [
         'Choosing the collection:',

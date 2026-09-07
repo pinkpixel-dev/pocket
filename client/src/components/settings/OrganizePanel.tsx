@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Check, Hash, Merge, Pencil, Tag as TagIcon, Trash2, X } from 'lucide-react';
+import { Check, Hash, Merge, Pencil, Sparkles, Tag as TagIcon, Trash2, X } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ConfirmDialog';
 import { MergeCollectionsDialog } from './MergeCollectionsDialog';
+import { CollectionCleanupDialog } from './CollectionCleanupDialog';
 import { UncollectedTriage } from './UncollectedTriage';
 import { AiCategorizeDialog } from '../AiCategorizeDialog';
 import { api, ApiError } from '../../lib/api';
@@ -13,6 +14,8 @@ import type { Collection, CollectionSortKey, Tag } from '../../lib/types';
 interface OrganizePanelProps {
   collections: Collection[];
   tags: Tag[];
+  /** Hides every AI control when no OpenAI key is set. */
+  aiConfigured: boolean;
   onChanged: () => void;
   onEditCollection: (collection: Collection) => void;
 }
@@ -23,6 +26,7 @@ const ROW =
 export function OrganizePanel({
   collections,
   tags,
+  aiConfigured,
   onChanged,
   onEditCollection,
 }: OrganizePanelProps) {
@@ -37,6 +41,7 @@ export function OrganizePanel({
   const [pendingConvertTags, setPendingConvertTags] = useState<Collection[] | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState<Collection[] | null>(null);
   const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
   const [aiTarget, setAiTarget] = useState<{ bookmarkIds?: number[]; domain?: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -161,7 +166,19 @@ export function OrganizePanel({
           </div>
 
           {collections.length > 1 ? (
-            <div className="flex items-center gap-2 self-start text-[0.8125rem] sm:self-auto">
+            <div className="flex flex-wrap items-center gap-2 self-start text-[0.8125rem] sm:self-auto">
+              {aiConfigured ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCleanupOpen(true)}
+                  className="text-[0.8125rem]"
+                  title="Let the AI propose merges for collections that are really one subject"
+                >
+                  <Sparkles size={14} aria-hidden />
+                  Tidy up with AI
+                </Button>
+              ) : null}
               <span className="text-ink-muted">Sort:</span>
               <select
                 value={sortOrder}
@@ -274,6 +291,7 @@ export function OrganizePanel({
 
       <UncollectedTriage
         collections={collections}
+        aiConfigured={aiConfigured}
         onChanged={onChanged}
         onAiCategorize={(bookmarkIds, domain) => {
           setAiTarget({ bookmarkIds, domain });
@@ -347,6 +365,12 @@ export function OrganizePanel({
           </ul>
         )}
       </section>
+
+      <CollectionCleanupDialog
+        open={cleanupOpen}
+        onClose={() => setCleanupOpen(false)}
+        onApplied={onChanged}
+      />
 
       <MergeCollectionsDialog
         open={mergeDialogOpen}

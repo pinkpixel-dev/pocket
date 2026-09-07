@@ -140,7 +140,6 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
             >
               <option value="hierarchy">Smart hierarchy (Top folder = Collection, Subfolders = Tags)</option>
               <option value="tags_only">Tags only (Turn all folders into tags)</option>
-              <option value="innermost">Innermost folder (Legacy Pocket behavior)</option>
             </select>
           </div>
 

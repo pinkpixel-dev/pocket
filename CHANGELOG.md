@@ -2,6 +2,28 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 1.2.0 - September 7, 2026
+
+### 🗂️ Collections
+
+- AI sorting now plans before it files. It reads everything in "No collection", proposes a short list of broad collections (roughly one per twelve links), and then files bookmarks into that closed list. A name outside the plan is dropped instead of created, so a run can no longer end with a collection per bookmark
+- The planned collections are shown as chips before sorting starts, and any of them can be dropped
+- Sorting runs through the whole uncollected list in batches of 40 with visible progress, instead of stopping at the first 30
+- New "Tidy up with AI" action above the collection list. It reviews every collection with its size and sample titles, then proposes merges and tag conversions for review. "AI music" and "AI prompting" become "AI", "Creative licensing" and "Open source licensing" become "Licensing"
+- Merging can now keep each old collection name as a tag, on by default in the tidy-up plan and offered as a checkbox in the manual merge dialog
+- The single-bookmark AI pass no longer prefers inventing a collection when it is torn. It reuses the existing broader one and can never create a narrower version of a collection you already have
+
+### 📥 Import
+
+- Remove the "Innermost folder" folder organization option, which was the setting most likely to produce hundreds of one-link collections. Imports that send it now fall back to Smart hierarchy
+
+### 🛠️ API
+
+- Add `POST /api/ai/plan-collections` and `POST /api/ai/suggest-collection-cleanup`
+- `POST /api/ai/suggest-categories` accepts a `collections` list, which is the closed set of names filing may use
+- `POST /api/collections/merge` accepts `tagWithSourceNames`
+- AI failures now answer with 502 and the message OpenAI returned, instead of a generic 500
+
 ## 1.1.0 - September 7, 2026
 
 ### 🧹 Bulk actions

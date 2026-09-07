@@ -10,12 +10,15 @@ import { pluralize } from '../../lib/format';
 
 interface UncollectedTriageProps {
   collections: Collection[];
+  /** Hides the AI entry point when no OpenAI key is set. */
+  aiConfigured: boolean;
   onChanged: () => void;
   onAiCategorize: (bookmarkIds?: number[], domain?: string) => void;
 }
 
 export function UncollectedTriage({
   collections,
+  aiConfigured,
   onChanged,
   onAiCategorize,
 }: UncollectedTriageProps) {
@@ -98,14 +101,17 @@ export function UncollectedTriage({
             Grouped by domain ({pluralize(totalUncollectedCount, 'bookmark')}) to help file batches into collections quickly.
           </p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => onAiCategorize()}
-          className="self-start sm:self-auto"
-        >
-          <Sparkles size={15} className="text-accent" aria-hidden />
-          AI categorize uncollected
-        </Button>
+        {aiConfigured ? (
+          <Button
+            variant="secondary"
+            onClick={() => onAiCategorize()}
+            className="self-start sm:self-auto"
+            title="Plan a short list of collections, then file everything into it"
+          >
+            <Sparkles size={15} className="text-accent" aria-hidden />
+            Sort with AI
+          </Button>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-1.5 pt-1">

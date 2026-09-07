@@ -17,7 +17,12 @@ import { queueSize } from '../services/queue.js';
 import { badRequest } from '../lib/errors.js';
 import { cancelLibraryAudit, getAuditStatus, startLibraryAudit } from '../services/audit.js';
 import { isAiConfigured } from '../services/settings.js';
-import { applyBatchCategorization, suggestBatchCollections } from '../services/ai-batch.js';
+import {
+  applyBatchCategorization,
+  planCollections,
+  suggestBatchCollections,
+} from '../services/ai-batch.js';
+import { suggestCollectionCleanup } from '../services/ai-cleanup.js';
 
 export const libraryRouter = Router();
 
@@ -63,9 +68,14 @@ libraryRouter.post('/collections/merge', (req, res) => {
   const schema = z.object({
     sourceIds: z.array(z.number().int().positive()).min(1),
     targetId: z.number().int().positive(),
+    tagWithSourceNames: z.boolean().optional(),
   });
   const data = parse(schema, req.body);
-  res.json(mergeCollections(data.sourceIds, data.targetId));
+  res.json(
+    mergeCollections(data.sourceIds, data.targetId, {
+      tagWithSourceNames: data.tagWithSourceNames ?? false,
+    }),
+  );
 });
 
 libraryRouter.post('/collections/convert-to-tags', (req, res) => {
@@ -92,6 +102,20 @@ libraryRouter.post('/library/batch-assign-collection', (req, res) => {
   res.json({ updatedCount });
 });
 
+libraryRouter.post('/ai/plan-collections', async (req, res, next) => {
+  try {
+    if (!isAiConfigured()) {
+      throw badRequest('Add an OpenAI API key in Settings first.');
+    }
+    const schema = z.object({
+      bookmarkIds: z.array(z.number().int().positive()).optional(),
+    });
+    res.json(await planCollections(parse(schema, req.body)));
+  } catch (error) {
+    next(error);
+  }
+});
+
 libraryRouter.post('/ai/suggest-categories', async (req, res, next) => {
   try {
     if (!isAiConfigured()) {
@@ -100,10 +124,22 @@ libraryRouter.post('/ai/suggest-categories', async (req, res, next) => {
     const schema = z.object({
       limit: z.number().int().min(1).max(50).optional(),
       bookmarkIds: z.array(z.number().int().positive()).optional(),
+      collections: z.array(z.string().min(1).max(80)).max(40).optional(),
     });
     const data = parse(schema, req.body);
     const result = await suggestBatchCollections(data);
     res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
+libraryRouter.post('/ai/suggest-collection-cleanup', async (_req, res, next) => {
+  try {
+    if (!isAiConfigured()) {
+      throw badRequest('Add an OpenAI API key in Settings first.');
+    }
+    res.json(await suggestCollectionCleanup());
   } catch (error) {
     next(error);
   }

@@ -285,6 +285,7 @@ export function SettingsView({
         <OrganizePanel
           collections={collections}
           tags={tags}
+          aiConfigured={Boolean(aiSettings?.configured)}
           onChanged={onChanged}
           onEditCollection={onEditCollection}
         />

@@ -26,6 +26,8 @@ Grid view above. There is also a [compact list view](DOCS/images/list-view.png) 
 - Three card sizes, set in Settings. Small fits the most links on screen, large gives you the biggest previews.
 - Mobile PWA support. Add Pocket to your phone home screen for a standalone app experience.
 - Import from any browser's bookmark HTML export. Folders become collections, and links you already have are skipped.
+- Bulk sorting for everything sitting in "No collection". The AI plans a short list of collections first, then files your unsorted links into it, and you review the result before anything is applied.
+- A tidy-up pass for a collection list that has gotten out of hand. It proposes merges, keeps the old names as tags, and you pick which ones to accept.
 - Export as browser-compatible HTML, or as JSON that also keeps your collections and tags.
 
 ## What it does not do
@@ -47,9 +49,19 @@ Two things worth knowing:
 - The key is stored as plain text in your Pocket database, which means it is also in your backups. If you would rather it never touched the database, set `POCKET_OPENAI_API_KEY` instead. The environment always wins, and Pocket then refuses to let the browser change it.
 - Imported bookmarks are skipped. A browser export can be thousands of links, and filling all of them in automatically would be a bill you did not agree to. Run those one at a time from the card menu.
 
-Pocket sends the URL, the site name, whatever title and description it already has, about 1500 characters of the page's own text, and your existing collections and tags. Each collection goes over with a couple of the titles already filed under it, because a name on its own is not much to judge a fit by. The instruction is to reuse a collection only when the link is genuinely about the same subject, and to make a new one when it is torn, since a collection that collects unrelated things is not worth much. It sends `store: false`, so OpenAI keeps no copy.
+Pocket sends the URL, the site name, whatever title and description it already has, about 1500 characters of the page's own text, and your existing collections and tags. Each collection goes over with a couple of the titles already filed under it, because a name on its own is not much to judge a fit by. The instruction is to reuse a collection whenever the link belongs to that subject area, and to only name a new one when nothing on the list is close. It is explicitly told not to create a narrower version of a collection you already have, because that is how you end up with "AI", "AI music" and "AI prompting" sitting next to each other. The specific bit goes in the tags instead. It sends `store: false`, so OpenAI keeps no copy.
 
 When you are filing something by hand, the collection dropdown in the add and edit dialogs has a "+ Create new collection" option, so you do not have to close the dialog to make one first.
+
+## Keeping collections under control
+
+A bookmark library goes wrong in a predictable way: you end up with 90 collections, most of them holding a single link, and a pile of stuff in "No collection" that never got filed at all. Pocket has two tools for that, both in Settings under Collections and tags, and both need an OpenAI key.
+
+**Sorting what is unfiled.** Open the AI sorting dialog from the uncollected triage section. It works in two passes. First it reads everything sitting in "No collection" and proposes a short list of collections, roughly one per twelve links. You get that list as chips and can drop any you do not want. Then it files every unsorted bookmark into that list and nothing else. It cannot invent a new name halfway through, which is the whole point. Anything that fits none of the collections stays unfiled with its tags, which is a better outcome than a shelf built for one link.
+
+**Tidying what already exists.** Press "Tidy up with AI" above your collection list. It reads every collection with its size and a few of the titles in it, then proposes merges: "AI music" and "AI prompting" into "AI", "Creative licensing" and "Open source licensing" into "Licensing". Collections holding one or two links that belong to no larger subject get offered as tag conversions instead. Every merge keeps the old collection name as a tag, so nothing about a bookmark is lost when its shelf disappears. You untick anything you disagree with before applying.
+
+The same "keep the old names as tags" checkbox is on the manual merge dialog, so merging by hand does not lose the detail either.
 
 ## Covers
 

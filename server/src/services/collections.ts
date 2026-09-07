@@ -87,34 +87,61 @@ export function ensureCollection(name: string): Collection {
   return findCollectionByName(name) ?? createCollection({ name });
 }
 
+const linkTagStmt = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
+
+export interface MergeOptions {
+  /**
+   * Keeps each source collection's name as a tag on the bookmarks it held.
+   * Folding "AI music" into "AI" loses the word "music" otherwise.
+   */
+  tagWithSourceNames?: boolean;
+}
+
 export function mergeCollections(
   sourceIds: number[],
   targetId: number,
-): { movedCount: number; deletedCollections: number } {
+  options: MergeOptions = {},
+): { movedCount: number; deletedCollections: number; taggedCount: number } {
   const target = getCollection(targetId);
   if (!target) throw notFound('Target collection not found.');
 
   const validSources = sourceIds.filter((id) => id !== targetId);
-  if (validSources.length === 0) return { movedCount: 0, deletedCollections: 0 };
+  if (validSources.length === 0) return { movedCount: 0, deletedCollections: 0, taggedCount: 0 };
 
   return db.transaction(() => {
     let movedCount = 0;
+    let taggedCount = 0;
+    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ?');
     const moveStmt = db.prepare(
       "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE collection_id = ?",
     );
     const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ?');
 
     for (const srcId of validSources) {
+      if (options.tagWithSourceNames) {
+        const source = getCollection(srcId);
+        const tagName = source ? normalizeTagName(source.name) : '';
+        if (tagName) {
+          const tagId = ensureTagIds([tagName])[0];
+          if (tagId) {
+            // Tagging happens before the move, while the bookmarks can still
+            // be found by the collection they are leaving.
+            for (const row of selectBookmarks.all(srcId) as Array<{ id: number }>) {
+              linkTagStmt.run(row.id, tagId);
+              taggedCount += 1;
+            }
+          }
+        }
+      }
+
       const updateResult = moveStmt.run(targetId, srcId);
       movedCount += updateResult.changes;
       deleteStmt.run(srcId);
     }
 
-    return { movedCount, deletedCollections: validSources.length };
+    return { movedCount, deletedCollections: validSources.length, taggedCount };
   })();
 }
-
-const linkTagStmt = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
 
 export function convertCollectionsToTags(
   collectionIds: number[],

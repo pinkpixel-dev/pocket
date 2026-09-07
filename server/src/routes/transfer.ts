@@ -50,10 +50,11 @@ transferRouter.post('/import', upload.single('file'), async (req, res, next) => 
     const yearMode =
       req.body?.yearMode === 'since' || req.body?.yearMode === 'before' ? req.body.yearMode : 'exact';
     const rawStrategy = req.body?.folderStrategy;
-    const folderStrategy = (rawStrategy === 'tags_only' || rawStrategy === 'innermost' ? rawStrategy : 'hierarchy') as
+    // An older client can still send the retired "innermost" strategy, which
+    // falls back to the hierarchy default rather than failing the import.
+    const folderStrategy = (rawStrategy === 'tags_only' ? rawStrategy : 'hierarchy') as
       | 'hierarchy'
-      | 'tags_only'
-      | 'innermost';
+      | 'tags_only';
     const defaultCollection =
       typeof req.body?.defaultCollection === 'string' && req.body.defaultCollection.trim()
         ? req.body.defaultCollection.trim()

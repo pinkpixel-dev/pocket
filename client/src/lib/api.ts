@@ -1,5 +1,7 @@
 import type {
   AiBatchResult,
+  CleanupPlan,
+  CollectionPlan,
   AiSettings,
   ApplyCategoryAssignment,
   AuditStatus,
@@ -235,10 +237,15 @@ export const api = {
   mergeCollections(
     sourceIds: number[],
     targetId: number,
-  ): Promise<{ movedCount: number; deletedCollections: number }> {
+    options: { tagWithSourceNames?: boolean } = {},
+  ): Promise<{ movedCount: number; deletedCollections: number; taggedCount: number }> {
     return call('/api/collections/merge', {
       method: 'POST',
-      body: JSON.stringify({ sourceIds, targetId }),
+      body: JSON.stringify({
+        sourceIds,
+        targetId,
+        tagWithSourceNames: options.tagWithSourceNames ?? false,
+      }),
     });
   },
 
@@ -266,9 +273,23 @@ export const api = {
     });
   },
 
+  /** Decides the collections a filing run may use, before anything is filed. */
+  planCollections(options?: { bookmarkIds?: number[] }): Promise<CollectionPlan> {
+    return call('/api/ai/plan-collections', {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  /** Reviews the whole collection list and proposes merges and tag conversions. */
+  suggestCollectionCleanup(): Promise<CleanupPlan> {
+    return call('/api/ai/suggest-collection-cleanup', { method: 'POST' });
+  },
+
   suggestBatchCategories(options?: {
     limit?: number;
     bookmarkIds?: number[];
+    collections?: string[];
   }): Promise<AiBatchResult> {
     return call('/api/ai/suggest-categories', {
       method: 'POST',

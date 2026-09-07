@@ -142,13 +142,48 @@ export interface AiBatchResult {
   processedCount: number;
 }
 
+export interface PlannedCollection {
+  name: string;
+  description: string;
+  /** True when the library has no collection by this name yet. */
+  isNew: boolean;
+}
+
+export interface CollectionPlan {
+  collections: PlannedCollection[];
+  /** The uncollected bookmarks the plan covers, in filing order. */
+  bookmarkIds: number[];
+  totalUncollected: number;
+}
+
+export interface CleanupSource {
+  id: number;
+  name: string;
+  bookmarkCount: number;
+}
+
+export interface CleanupAction {
+  kind: 'merge' | 'convert_to_tags';
+  target: string;
+  /** Null when the merge target still has to be created. */
+  targetId: number | null;
+  sources: CleanupSource[];
+  reason: string;
+}
+
+export interface CleanupPlan {
+  actions: CleanupAction[];
+  collectionCount: number;
+  singletonCount: number;
+}
+
 export interface ApplyCategoryAssignment {
   bookmarkId: number;
   collectionName?: string;
   tags?: string[];
 }
 
-export type FolderStrategy = 'hierarchy' | 'tags_only' | 'innermost';
+export type FolderStrategy = 'hierarchy' | 'tags_only';
 
 export interface ImportFileOptions {
   fetchMetadata?: boolean;

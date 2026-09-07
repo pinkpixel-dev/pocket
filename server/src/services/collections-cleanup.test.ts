@@ -141,6 +141,33 @@ test('mergeCollections moves bookmarks and deletes source collections', () => {
   assert.equal(updatedB.collectionId, targetCol.id);
 });
 
+test('mergeCollections can keep each source name as a tag', () => {
+  const music = createCollection({ name: 'AI music' });
+  const prompting = createCollection({ name: 'AI prompting' });
+  const target = createCollection({ name: 'AI' });
+
+  const song = createBookmark({
+    url: 'https://suno.example/song',
+    title: 'Song tool',
+    collectionId: music.id,
+    metadataStatus: 'manual',
+  });
+  const prompt = createBookmark({
+    url: 'https://prompts.example/guide',
+    title: 'Prompt guide',
+    collectionId: prompting.id,
+    metadataStatus: 'manual',
+  });
+
+  const res = mergeCollections([music.id, prompting.id], target.id, { tagWithSourceNames: true });
+
+  assert.equal(res.movedCount, 2);
+  assert.equal(res.taggedCount, 2);
+  assert.deepEqual(getBookmark(song.bookmark.id)!.tags, ['ai music']);
+  assert.deepEqual(getBookmark(prompt.bookmark.id)!.tags, ['ai prompting']);
+  assert.equal(getBookmark(song.bookmark.id)!.collectionId, target.id);
+});
+
 test('convertCollectionsToTags converts collection to tag and deletes collection', () => {
   const microCol = createCollection({ name: 'Micro Topic' });
   const bm = createBookmark({
