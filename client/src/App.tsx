@@ -97,6 +97,8 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
   const [saving, setSaving] = useState(false);
 
   const [moveTarget, setMoveTarget] = useState<Bookmark | null>(null);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [bulkMoving, setBulkMoving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Bookmark | null>(null);
   const [collectionDialog, setCollectionDialog] = useState<{ open: boolean; collection: Collection | null }>({
     open: false,
@@ -120,6 +122,7 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
     // A selection only makes sense inside the view it was made in.
     setSelectMode(false);
     setSelectedIds(new Set());
+    setBulkMoveOpen(false);
   }, [library.route]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -154,17 +157,19 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
+    setBulkConfirm(false);
+    setBulkMoveOpen(false);
   }, []);
 
   // Escape leaves selection mode, the way it closes every other overlay here.
   useEffect(() => {
     if (!selectMode) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !bulkConfirm) exitSelectMode();
+      if (event.key === 'Escape' && !bulkConfirm && !bulkMoveOpen) exitSelectMode();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [selectMode, bulkConfirm, exitSelectMode]);
+  }, [selectMode, bulkConfirm, bulkMoveOpen, exitSelectMode]);
 
   const selectAll = async () => {
     setSelectingAll(true);
@@ -485,6 +490,46 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
     }
   };
 
+  const confirmBulkMove = async (collectionId: number | null, newCollectionName?: string) => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    setBulkMoving(true);
+    try {
+      let targetId = collectionId;
+      if (newCollectionName) {
+        const name = newCollectionName.trim();
+        const existing = library.collections.find(
+          (collection) => collection.name.toLowerCase() === name.toLowerCase(),
+        );
+        targetId = existing ? existing.id : (await api.createCollection({ name })).collection.id;
+      }
+
+      let updated = 0;
+      for (let index = 0; index < ids.length; index += 500) {
+        const result = await api.batchAssignCollection(ids.slice(index, index + 500), targetId);
+        updated += result.updatedCount;
+      }
+
+      const targetCol = targetId !== null ? library.collections.find((c) => c.id === targetId) : null;
+      const destination = newCollectionName?.trim() || targetCol?.name;
+      toast.success(
+        destination
+          ? `Moved ${pluralize(updated, 'bookmark')} to ${destination}.`
+          : `Moved ${pluralize(updated, 'bookmark')} to uncollected.`,
+      );
+
+      setBulkMoveOpen(false);
+      exitSelectMode();
+      await library.reload();
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : 'Those could not be moved.');
+      await library.reload();
+    } finally {
+      setBulkMoving(false);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     markBusy(deleteTarget.id, true);
@@ -620,6 +665,8 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
                 deleting={bulkDeleting}
                 onSelectAll={() => void selectAll()}
                 onClear={() => setSelectedIds(new Set())}
+                onMove={() => setBulkMoveOpen(true)}
+                moving={bulkMoving}
                 onDelete={() => setBulkConfirm(true)}
                 onExit={exitSelectMode}
                 onDismissBroken={library.route.kind === 'attention' ? handleBulkDismiss : undefined}
@@ -739,14 +786,22 @@ export default function App({ user, onUserChanged, onSignOut }: AppProps) {
       />
 
       <MoveDialog
-        open={moveTarget !== null}
+        open={moveTarget !== null || bulkMoveOpen}
         bookmark={moveTarget}
+        count={bulkMoveOpen ? selectedIds.size : undefined}
         collections={library.collections}
-        saving={moveTarget ? busyIds.has(moveTarget.id) : false}
-        onClose={() => setMoveTarget(null)}
-        onSubmit={(collectionId, newCollectionName) =>
-          void moveBookmark(collectionId, newCollectionName)
-        }
+        saving={moveTarget ? busyIds.has(moveTarget.id) : bulkMoving}
+        onClose={() => {
+          setMoveTarget(null);
+          setBulkMoveOpen(false);
+        }}
+        onSubmit={(collectionId, newCollectionName) => {
+          if (bulkMoveOpen) {
+            void confirmBulkMove(collectionId, newCollectionName);
+          } else {
+            void moveBookmark(collectionId, newCollectionName);
+          }
+        }}
       />
 
       <ConfirmDialog

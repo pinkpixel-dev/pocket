@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { Check, Inbox, Plus, X } from 'lucide-react';
 import { Dialog } from './ui/Dialog';
 import { Button } from './ui/Button';
+import { pluralize } from '../lib/format';
 import type { Bookmark, Collection } from '../lib/types';
 
 /** Stands in for a collection id while the name is still being typed. */
@@ -10,7 +11,8 @@ const NEW_COLLECTION = '__new' as const;
 
 interface MoveDialogProps {
   open: boolean;
-  bookmark: Bookmark | null;
+  bookmark?: Bookmark | null;
+  count?: number;
   collections: Collection[];
   saving: boolean;
   onClose: () => void;
@@ -18,13 +20,17 @@ interface MoveDialogProps {
   onSubmit: (collectionId: number | null, newCollectionName?: string) => void;
 }
 
-export function MoveDialog({ open, bookmark, collections, saving, onClose, onSubmit }: MoveDialogProps) {
-  const [selected, setSelected] = useState<number | typeof NEW_COLLECTION | null>(null);
+export function MoveDialog({ open, bookmark, count, collections, saving, onClose, onSubmit }: MoveDialogProps) {
+  const [selected, setSelected] = useState<number | typeof NEW_COLLECTION | null | undefined>(undefined);
   const [newName, setNewName] = useState('');
 
   useEffect(() => {
     if (!open) return;
-    setSelected(bookmark?.collectionId ?? null);
+    if (bookmark) {
+      setSelected(bookmark.collectionId);
+    } else {
+      setSelected(undefined);
+    }
     setNewName('');
   }, [open, bookmark]);
 
@@ -46,8 +52,14 @@ export function MoveDialog({ open, bookmark, collections, saving, onClose, onSub
       onSubmit(null, trimmedName);
       return;
     }
-    onSubmit(selected);
+    if (selected !== undefined) {
+      onSubmit(selected);
+    }
   };
+
+  const description = count !== undefined
+    ? `Move ${pluralize(count, 'bookmark')} to a collection.`
+    : (bookmark?.title || bookmark?.url);
 
   return (
     <Dialog
@@ -55,7 +67,7 @@ export function MoveDialog({ open, bookmark, collections, saving, onClose, onSub
       onClose={onClose}
       size="sm"
       title="Move to collection"
-      description={bookmark?.title || bookmark?.url}
+      description={description}
       footer={
         <>
           <Button onClick={onClose} disabled={saving}>
@@ -65,7 +77,7 @@ export function MoveDialog({ open, bookmark, collections, saving, onClose, onSub
             variant="primary"
             onClick={submit}
             loading={saving}
-            disabled={creating && !trimmedName}
+            disabled={selected === undefined || (creating && !trimmedName)}
           >
             {creating ? 'Create and move' : 'Move'}
           </Button>
@@ -143,7 +155,7 @@ export function MoveDialog({ open, bookmark, collections, saving, onClose, onSub
               variant="ghost"
               aria-label="Cancel creating a collection"
               onClick={() => {
-                setSelected(bookmark?.collectionId ?? null);
+                setSelected(bookmark ? bookmark.collectionId : undefined);
                 setNewName('');
               }}
             >

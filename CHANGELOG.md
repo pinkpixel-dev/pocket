@@ -2,6 +2,12 @@
 
 All notable changes to Pocket are recorded here. This project follows [semantic versioning](https://semver.org/).
 
+## 2.2.0 - September 7, 2026
+
+### 📁 Collections
+
+- Bulk move to collection is now available when selecting bookmarks. You can pick multiple bookmark cards or rows and file them into an existing collection, unfile them to No collection, or create a brand new collection directly from the move dialog
+
 ## 2.1.2 - September 7, 2026
 
 ### 🎨 Cards
