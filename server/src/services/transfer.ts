@@ -1,25 +1,39 @@
 import * as cheerio from 'cheerio';
 import { db } from '../db/index.js';
 import type { BookmarkRow } from '../lib/types.js';
-import { createBookmark } from './bookmarks.js';
+import { createBookmark, findByNormalizedUrl } from './bookmarks.js';
 import { ensureCollection, listCollections } from './collections.js';
 import { listTags, parseTagInput } from './tags.js';
 import { enqueueEnrich } from './queue.js';
+import { probeUrl } from '../lib/http.js';
+import { normalizeUrl, parseUrl } from '../lib/url.js';
 
 export interface ImportSummary {
   imported: number;
   duplicates: number;
   skipped: number;
+  deadLinks: number;
+  yearFiltered: number;
   collectionsCreated: number;
   errors: string[];
 }
 
-interface ParsedLink {
+export interface ImportOptions {
+  fetchMetadata: boolean;
+  skipDeadLinks?: boolean;
+  yearFilter?: number;
+  yearMode?: 'exact' | 'since' | 'before';
+  folderStrategy?: 'hierarchy' | 'tags_only' | 'innermost';
+  defaultCollection?: string;
+}
+
+export interface ParsedLink {
   url: string;
   title: string;
   description: string;
   tags: string[];
   collection: string | null;
+  folderPath?: string[];
   createdAt?: string;
   isPinned?: boolean;
 }
@@ -35,9 +49,9 @@ function toSqliteDate(value: string | number | undefined): string | undefined {
 }
 
 /**
- * Reads the Netscape bookmark format that every browser exports. Folders are
- * nested with <H3> headings; Pocket flattens them to the innermost folder name
- * because a bookmark belongs to one collection.
+ * Reads the Netscape bookmark format exported by standard browsers.
+ * Walks the enclosing folder hierarchy so caller can decide how to map
+ * nested folders into collections and tags.
  */
 export function parseBookmarkHtml(html: string): ParsedLink[] {
   const $ = cheerio.load(html);
@@ -48,15 +62,24 @@ export function parseBookmarkHtml(html: string): ParsedLink[] {
     const href = anchor.attr('href')?.trim();
     if (!href || !/^https?:/i.test(href)) return;
 
-    // The nearest enclosing <DL> is preceded by the <H3> that names the folder.
-    let folder: string | null = null;
-    const parentList = anchor.closest('dl');
-    if (parentList.length) {
-      const heading = parentList.prevAll('h3').first().text().trim() || parentList.parent().find('> h3').first().text().trim();
-      if (heading && !/^(bookmarks(\s+(bar|menu|toolbar))?|other bookmarks|favorites)$/i.test(heading)) {
-        folder = heading.slice(0, 80);
+    // Collect folder ancestry from outermost to innermost
+    const folderPath: string[] = [];
+    anchor.parents('dl').each((_, dlElem) => {
+      const dl = $(dlElem);
+      const heading =
+        dl.prevAll('h3').first().text().trim() ||
+        dl.parent().children('h3').first().text().trim() ||
+        dl.parent().prevAll('h3').first().text().trim();
+      if (
+        heading &&
+        !/^(bookmarks(\s+(bar|menu|toolbar))?|other bookmarks|favorites|mobile bookmarks)$/i.test(
+          heading,
+        )
+      ) {
+        folderPath.push(heading.slice(0, 80));
       }
-    }
+    });
+    folderPath.reverse();
 
     const description = anchor.parent().next('dd').text().trim();
 
@@ -65,7 +88,8 @@ export function parseBookmarkHtml(html: string): ParsedLink[] {
       title: anchor.text().replace(/\s+/g, ' ').trim(),
       description: description.slice(0, 600),
       tags: parseTagInput(anchor.attr('tags')),
-      collection: folder,
+      collection: folderPath.length > 0 ? (folderPath[folderPath.length - 1] ?? null) : null,
+      folderPath,
       createdAt: toSqliteDate(anchor.attr('add_date')),
     });
   });
@@ -73,26 +97,130 @@ export function parseBookmarkHtml(html: string): ParsedLink[] {
   return links;
 }
 
-export function importLinks(links: ParsedLink[], options: { fetchMetadata: boolean }): ImportSummary {
+export async function importLinks(links: ParsedLink[], options: ImportOptions): Promise<ImportSummary> {
   const summary: ImportSummary = {
     imported: 0,
     duplicates: 0,
     skipped: 0,
+    deadLinks: 0,
+    yearFiltered: 0,
     collectionsCreated: 0,
     errors: [],
   };
+
+  // 1. Year Filter
+  let candidates = links;
+  if (options.yearFilter !== undefined && Number.isFinite(options.yearFilter)) {
+    const filtered: ParsedLink[] = [];
+    for (const link of links) {
+      if (!link.createdAt) {
+        summary.yearFiltered += 1;
+        continue;
+      }
+      const linkYear = parseInt(link.createdAt.slice(0, 4), 10);
+      if (Number.isNaN(linkYear)) {
+        summary.yearFiltered += 1;
+        continue;
+      }
+      const match =
+        options.yearMode === 'since'
+          ? linkYear >= options.yearFilter
+          : options.yearMode === 'before'
+            ? linkYear < options.yearFilter
+            : linkYear === options.yearFilter;
+
+      if (match) {
+        filtered.push(link);
+      } else {
+        summary.yearFiltered += 1;
+      }
+    }
+    candidates = filtered;
+  }
+
+  // 2. Dead Links Filter (if requested)
+  if (options.skipDeadLinks && candidates.length > 0) {
+    const toProbe: ParsedLink[] = [];
+    const aliveList: ParsedLink[] = [];
+
+    // Filter duplicates and invalid URLs first so we don't probe links already stored
+    for (const link of candidates) {
+      try {
+        const parsed = parseUrl(link.url);
+        const normalized = normalizeUrl(parsed);
+        if (findByNormalizedUrl(normalized)) {
+          summary.duplicates += 1;
+          continue;
+        }
+        toProbe.push(link);
+      } catch {
+        summary.skipped += 1;
+      }
+    }
+
+    const CONCURRENCY = 8;
+    let cursor = 0;
+
+    async function probeWorker(): Promise<void> {
+      while (cursor < toProbe.length) {
+        const idx = cursor++;
+        const link = toProbe[idx];
+        if (!link) break;
+
+        const probe = await probeUrl(link.url, 5000);
+        if (probe.alive) {
+          aliveList.push(link);
+        } else {
+          summary.deadLinks += 1;
+          if (summary.errors.length < 20) {
+            summary.errors.push(`${link.url}: dead link (${probe.error ?? 'unreachable'})`);
+          }
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, toProbe.length) }, () => probeWorker()),
+    );
+    candidates = aliveList;
+  }
 
   const collectionIds = new Map<string, number>();
   const existingNames = new Set(listCollections().map((collection) => collection.name.toLowerCase()));
   const queue: number[] = [];
 
-  for (const link of links) {
+  for (const link of candidates) {
     try {
+      let targetCollectionName: string | null = null;
+      const extraTags: string[] = [];
+      const strategy = options.folderStrategy || 'hierarchy';
+
+      const path = link.folderPath ?? [];
+      if (strategy === 'tags_only') {
+        targetCollectionName = options.defaultCollection?.trim() || null;
+        extraTags.push(...path);
+      } else if (strategy === 'innermost') {
+        targetCollectionName =
+          (path.length > 0 ? (path[path.length - 1] ?? null) : null) ||
+          options.defaultCollection?.trim() ||
+          null;
+      } else {
+        // 'hierarchy' (default)
+        if (path.length > 0) {
+          targetCollectionName = path[0] ?? null;
+          if (path.length > 1) {
+            extraTags.push(...path.slice(1));
+          }
+        } else if (options.defaultCollection?.trim()) {
+          targetCollectionName = options.defaultCollection.trim();
+        }
+      }
+
       let collectionId: number | null = null;
-      if (link.collection) {
-        const key = link.collection.toLowerCase();
+      if (targetCollectionName) {
+        const key = targetCollectionName.toLowerCase();
         if (!collectionIds.has(key)) {
-          const collection = ensureCollection(link.collection);
+          const collection = ensureCollection(targetCollectionName);
           collectionIds.set(key, collection.id);
           if (!existingNames.has(key)) {
             existingNames.add(key);
@@ -102,12 +230,19 @@ export function importLinks(links: ParsedLink[], options: { fetchMetadata: boole
         collectionId = collectionIds.get(key) ?? null;
       }
 
+      const combinedTags = Array.from(
+        new Set([
+          ...link.tags,
+          ...extraTags.map((t) => t.trim()).filter(Boolean),
+        ]),
+      );
+
       const result = createBookmark({
         url: link.url,
         title: link.title,
         description: link.description,
         collectionId,
-        tags: link.tags,
+        tags: combinedTags,
         isPinned: link.isPinned,
         createdAt: link.createdAt,
         metadataStatus: options.fetchMetadata ? 'pending' : 'manual',
@@ -191,12 +326,14 @@ export function linksFromBackup(backup: unknown): ParsedLink[] {
     const record = entry as Record<string, unknown>;
     if (typeof record.url !== 'string') continue;
 
+    const col = typeof record.collection === 'string' ? record.collection : null;
     links.push({
       url: record.url,
       title: typeof record.title === 'string' ? record.title : '',
       description: typeof record.description === 'string' ? record.description : '',
       tags: Array.isArray(record.tags) ? parseTagInput(record.tags.map(String)) : [],
-      collection: typeof record.collection === 'string' ? record.collection : null,
+      collection: col,
+      folderPath: col ? [col] : [],
       createdAt: toSqliteDate(typeof record.createdAt === 'string' ? record.createdAt : undefined),
       isPinned: record.isPinned === true,
     });

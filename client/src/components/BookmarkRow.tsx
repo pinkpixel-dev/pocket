@@ -45,7 +45,13 @@ export function BookmarkRow({ bookmark, collection, busy, ...actions }: RowProps
             {relativeTime(bookmark.createdAt)}
           </time>
           {bookmark.metadataStatus === 'failed' && !bookmark.coverUrl ? (
-            <AlertTriangle size={11} className="text-danger" aria-label="Preview could not be fetched" />
+            <span
+              className="inline-flex items-center gap-1 text-danger"
+              title={bookmark.metadataError ?? 'Link could not be reached'}
+            >
+              <AlertTriangle size={11} aria-hidden />
+              <span>broken link</span>
+            </span>
           ) : null}
         </div>
       </div>

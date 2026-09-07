@@ -1,4 +1,18 @@
-import type { AiSettings, Bookmark, Collection, ImportSummary, SortKey, Stats, Tag } from './types';
+import type {
+  AiBatchResult,
+  AiSettings,
+  ApplyCategoryAssignment,
+  AuditStatus,
+  Bookmark,
+  Collection,
+  ImportFileOptions,
+  ImportSummary,
+  MetadataStatus,
+  SortKey,
+  Stats,
+  Tag,
+  UncollectedDomainGroup,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -51,6 +65,7 @@ export interface BookmarkFilters {
   collection?: number | 'none';
   tag?: string | 'none';
   pinned?: boolean;
+  status?: MetadataStatus;
   sort?: SortKey;
 }
 
@@ -61,6 +76,7 @@ export const api = {
     if (filters.collection !== undefined) params.set('collection', String(filters.collection));
     if (filters.tag !== undefined) params.set('tag', String(filters.tag));
     if (filters.pinned) params.set('pinned', '1');
+    if (filters.status) params.set('status', filters.status);
     if (filters.sort) params.set('sort', filters.sort);
     const query = params.toString();
     return call(`/api/bookmarks${query ? `?${query}` : ''}`);
@@ -175,10 +191,88 @@ export const api = {
     return call('/api/stats');
   },
 
-  importFile(file: File, fetchMetadata: boolean): Promise<{ summary: ImportSummary }> {
+  importFile(
+    file: File,
+    options: boolean | ImportFileOptions = true,
+  ): Promise<{ summary: ImportSummary }> {
+    const opts: ImportFileOptions =
+      typeof options === 'boolean' ? { fetchMetadata: options } : options;
     const form = new FormData();
     form.append('file', file);
-    form.append('fetchMetadata', String(fetchMetadata));
+    form.append('fetchMetadata', String(opts.fetchMetadata !== false));
+    if (opts.skipDeadLinks) form.append('skipDeadLinks', 'true');
+    if (opts.yearFilter !== undefined && opts.yearFilter !== null) {
+      form.append('yearFilter', String(opts.yearFilter));
+    }
+    if (opts.yearMode) form.append('yearMode', opts.yearMode);
+    if (opts.folderStrategy) form.append('folderStrategy', opts.folderStrategy);
+    if (opts.defaultCollection) form.append('defaultCollection', opts.defaultCollection);
     return call('/api/import', { method: 'POST', body: form });
   },
+
+  getAuditStatus(): Promise<AuditStatus> {
+    return call('/api/audit-links');
+  },
+
+  startAudit(): Promise<AuditStatus> {
+    return call('/api/audit-links', { method: 'POST' });
+  },
+
+  cancelAudit(): Promise<{ cancelled: boolean }> {
+    return call('/api/audit-links/cancel', { method: 'POST' });
+  },
+
+  mergeCollections(
+    sourceIds: number[],
+    targetId: number,
+  ): Promise<{ movedCount: number; deletedCollections: number }> {
+    return call('/api/collections/merge', {
+      method: 'POST',
+      body: JSON.stringify({ sourceIds, targetId }),
+    });
+  },
+
+  convertCollectionsToTags(
+    collectionIds: number[],
+  ): Promise<{ converted: number; bookmarksTagged: number }> {
+    return call('/api/collections/convert-to-tags', {
+      method: 'POST',
+      body: JSON.stringify({ collectionIds }),
+    });
+  },
+
+  getUncollectedDomains(limit?: number): Promise<{ domains: UncollectedDomainGroup[] }> {
+    const q = limit ? `?limit=${limit}` : '';
+    return call(`/api/library/uncollected-domains${q}`);
+  },
+
+  batchAssignCollection(
+    bookmarkIds: number[],
+    collectionId: number | null,
+  ): Promise<{ updatedCount: number }> {
+    return call('/api/library/batch-assign-collection', {
+      method: 'POST',
+      body: JSON.stringify({ bookmarkIds, collectionId }),
+    });
+  },
+
+  suggestBatchCategories(options?: {
+    limit?: number;
+    bookmarkIds?: number[];
+  }): Promise<AiBatchResult> {
+    return call('/api/ai/suggest-categories', {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    });
+  },
+
+  applyBatchCategories(
+    assignments: ApplyCategoryAssignment[],
+  ): Promise<{ applied: number }> {
+    return call('/api/ai/apply-categories', {
+      method: 'POST',
+      body: JSON.stringify({ assignments }),
+    });
+  },
 };
+

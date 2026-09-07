@@ -76,11 +76,22 @@ export interface ImportSummary {
   imported: number;
   duplicates: number;
   skipped: number;
+  deadLinks: number;
+  yearFiltered: number;
   collectionsCreated: number;
   errors: string[];
 }
 
+export interface AuditStatus {
+  running: boolean;
+  total: number;
+  checked: number;
+  broken: number;
+  lastRunAt: string | null;
+}
+
 export type SortKey = 'newest' | 'oldest' | 'title' | 'domain' | 'updated';
+export type CollectionSortKey = 'count-desc' | 'count-asc' | 'name-asc';
 export type ViewMode = 'grid' | 'list';
 export type CardSize = 'small' | 'medium' | 'large';
 export type AccentColor =
@@ -106,4 +117,44 @@ export interface BookmarkDraft {
   newCollectionName: string | null;
   tags: string[];
   isPinned: boolean;
+}
+
+export interface UncollectedDomainGroup {
+  domain: string;
+  count: number;
+  bookmarkIds: number[];
+}
+
+export interface CategorySuggestion {
+  bookmarkId: number;
+  url: string;
+  domain: string;
+  currentTitle: string;
+  collection: string;
+  isNew: boolean;
+  tags: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface AiBatchResult {
+  suggestions: CategorySuggestion[];
+  totalUncollected: number;
+  processedCount: number;
+}
+
+export interface ApplyCategoryAssignment {
+  bookmarkId: number;
+  collectionName?: string;
+  tags?: string[];
+}
+
+export type FolderStrategy = 'hierarchy' | 'tags_only' | 'innermost';
+
+export interface ImportFileOptions {
+  fetchMetadata?: boolean;
+  skipDeadLinks?: boolean;
+  yearFilter?: number | null;
+  yearMode?: 'exact' | 'since' | 'before';
+  folderStrategy?: FolderStrategy;
+  defaultCollection?: string;
 }

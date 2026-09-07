@@ -1,11 +1,16 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import clsx from 'clsx';
+import { Activity, Loader2, TriangleAlert } from 'lucide-react';
 import { TransferPanel } from './settings/TransferPanel';
 import { OrganizePanel } from './settings/OrganizePanel';
 import { AiPanel } from './settings/AiPanel';
+import { Button } from './ui/Button';
 import { SelectField } from './ui/Field';
-import { pluralize } from '../lib/format';
+import { useToast } from './ui/Toaster';
+import { pluralize, relativeTime } from '../lib/format';
 import { ACCENT_COLORS } from '../lib/theme';
-import type { AccentColor, AiSettings, CardSize, Collection, Stats, Tag } from '../lib/types';
+import { api } from '../lib/api';
+import type { AccentColor, AiSettings, AuditStatus, CardSize, Collection, Stats, Tag } from '../lib/types';
 
 interface SettingsViewProps {
   stats: Stats | null;
@@ -22,9 +27,9 @@ interface SettingsViewProps {
 }
 
 const CARD_SIZES: Array<{ value: CardSize; label: string }> = [
-  { value: 'small', label: 'Small — most links on screen' },
-  { value: 'medium', label: 'Medium — the default' },
-  { value: 'large', label: 'Large — big previews' },
+  { value: 'small', label: 'Small (most links on screen)' },
+  { value: 'medium', label: 'Medium (the default)' },
+  { value: 'large', label: 'Large (big previews)' },
 ];
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
@@ -33,6 +38,137 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
       <h2 className="mb-4 text-base text-ink">{title}</h2>
       {children}
     </section>
+  );
+}
+
+function LinkHealthSection({ stats, onChanged }: { stats: Stats | null; onChanged: () => void }) {
+  const toast = useToast();
+  const [audit, setAudit] = useState<AuditStatus | null>(null);
+  const pollTimer = useRef<number | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimer.current !== null) {
+      window.clearInterval(pollTimer.current);
+      pollTimer.current = null;
+    }
+  }, []);
+
+  const pollStatus = useCallback(async () => {
+    try {
+      const status = await api.getAuditStatus();
+      setAudit(status);
+      if (!status.running) {
+        stopPolling();
+        onChanged();
+      }
+    } catch {
+      stopPolling();
+    }
+  }, [stopPolling, onChanged]);
+
+  useEffect(() => {
+    void api.getAuditStatus().then((initial) => {
+      setAudit(initial);
+      if (initial.running) {
+        pollTimer.current = window.setInterval(() => void pollStatus(), 1000);
+      }
+    });
+    return stopPolling;
+  }, [pollStatus, stopPolling]);
+
+  const handleStart = async () => {
+    try {
+      const initial = await api.startAudit();
+      setAudit(initial);
+      stopPolling();
+      pollTimer.current = window.setInterval(() => void pollStatus(), 1000);
+      toast.info('Scanning saved bookmarks for broken links...');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not start scan.');
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await api.cancelAudit();
+      stopPolling();
+      const status = await api.getAuditStatus();
+      setAudit(status);
+      toast.info('Scan stopped.');
+      onChanged();
+    } catch {
+      // Ignored
+    }
+  };
+
+  if (audit?.running) {
+    const pct = audit.total > 0 ? Math.round((audit.checked / audit.total) * 100) : 0;
+    return (
+      <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-line bg-canvas p-3.5">
+        <div className="flex items-center justify-between text-[0.875rem]">
+          <span className="flex items-center gap-2 font-medium text-ink">
+            <Loader2 size={16} className="animate-spin text-accent" aria-hidden />
+            Checking bookmarks...
+          </span>
+          <span className="font-mono text-xs text-ink-muted tabular-nums">
+            {audit.checked} / {audit.total} ({pct}%)
+          </span>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full bg-accent transition-all duration-200"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="flex items-center justify-between text-xs">
+          <span className={audit.broken > 0 ? 'font-medium text-danger' : 'text-ink-faint'}>
+            {audit.broken > 0 ? `${pluralize(audit.broken, 'broken link')} found` : 'No dead links found so far'}
+          </span>
+          <button
+            type="button"
+            onClick={handleCancel}
+            className="text-ink-muted transition-colors hover:text-ink"
+          >
+            Cancel scan
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4 flex flex-col gap-3 border-t border-line pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-[0.875rem] font-semibold text-ink">Link health check</h4>
+          <p className="text-[0.8125rem] text-ink-muted">
+            {stats && stats.needsAttention > 0
+              ? `${pluralize(stats.needsAttention, 'bookmark')} could not be read or failed to respond.`
+              : 'Scan all saved links to check for dead pages, 404s, or unreachable domains.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {stats && stats.needsAttention > 0 ? (
+            <a
+              href="#/attention"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-danger/40 bg-danger/10 px-3 text-[0.8125rem] font-medium text-danger transition-colors hover:bg-danger/20"
+            >
+              <TriangleAlert size={14} aria-hidden />
+              View {stats.needsAttention} broken
+            </a>
+          ) : null}
+          <Button variant="secondary" size="sm" onClick={handleStart}>
+            <Activity size={14} aria-hidden />
+            Check for dead links
+          </Button>
+        </div>
+      </div>
+      {audit?.lastRunAt ? (
+        <p className="text-[0.75rem] text-ink-faint">
+          Last checked {relativeTime(audit.lastRunAt)}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -66,12 +202,7 @@ export function SettingsView({
           ))}
         </dl>
 
-        {stats && stats.needsAttention > 0 ? (
-          <p className="mt-3 text-[0.875rem] text-ink-muted">
-            {pluralize(stats.needsAttention, 'bookmark')} could not be read when Pocket last tried. Use
-            "Refresh preview" on a card to try again.
-          </p>
-        ) : null}
+        <LinkHealthSection stats={stats} onChanged={onChanged} />
       </Panel>
 
       <Panel title="Appearance">

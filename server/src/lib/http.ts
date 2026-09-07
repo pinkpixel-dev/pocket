@@ -217,3 +217,49 @@ export function fetchImage(url: string, signal?: AbortSignal): Promise<FetchResu
     signal,
   });
 }
+
+export interface ProbeResult {
+  alive: boolean;
+  status: number;
+  error: string | null;
+}
+
+/** Lightweight health check on a link, bounded by a small byte limit and short timeout. */
+export async function probeUrl(url: string, timeoutMs = 6000): Promise<ProbeResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const result = await safeFetch(url, {
+      maxBytes: 16 * 1024,
+      accept: '*/*',
+      signal: controller.signal,
+    });
+
+    if (result.status >= 400) {
+      return {
+        alive: false,
+        status: result.status,
+        error: `${new URL(url).hostname} answered with HTTP ${result.status}`,
+      };
+    }
+
+    return { alive: true, status: result.status, error: null };
+  } catch (error) {
+    if (controller.signal.aborted) {
+      return {
+        alive: false,
+        status: 0,
+        error: `${new URL(url).hostname} did not respond within ${Math.round(timeoutMs / 1000)}s`,
+      };
+    }
+    return {
+      alive: false,
+      status: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+

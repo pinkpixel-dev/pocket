@@ -55,6 +55,8 @@ function filtersForRoute(route: Route, search: string, sort: SortKey): BookmarkF
       return { ...base, tag: route.name };
     case 'untagged':
       return { ...base, tag: 'none' };
+    case 'attention':
+      return { ...base, status: 'failed' };
     default:
       return base;
   }

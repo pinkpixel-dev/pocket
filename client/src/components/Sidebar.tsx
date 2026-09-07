@@ -12,6 +12,7 @@ import {
   Settings,
   TagIcon,
   Trash2,
+  TriangleAlert,
   X,
 } from 'lucide-react';
 import { Menu } from './ui/Menu';
@@ -200,6 +201,16 @@ export function Sidebar({
               count={stats?.pinned}
               onNavigate={onClose}
             />
+            {stats && stats.needsAttention > 0 ? (
+              <NavLink
+                target={{ kind: 'attention' }}
+                current={route}
+                icon={<TriangleAlert size={16} aria-hidden />}
+                label="Needs attention"
+                count={stats.needsAttention}
+                onNavigate={onClose}
+              />
+            ) : null}
           </div>
 
           <SectionHeading

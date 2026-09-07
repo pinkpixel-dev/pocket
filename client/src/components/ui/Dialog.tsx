@@ -9,7 +9,7 @@ interface DialogProps {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'lg';
 }
 
 /**
@@ -59,7 +59,7 @@ export function Dialog({ open, onClose, title, description, children, footer, si
         className={clsx(
           'flex w-full flex-col overflow-hidden border border-line bg-surface shadow-2xl shadow-black/50',
           'max-h-[92dvh] rounded-t-2xl sm:my-8 sm:rounded-2xl',
-          size === 'sm' ? 'sm:max-w-md' : 'sm:max-w-xl',
+          size === 'sm' ? 'sm:max-w-md' : size === 'lg' ? 'sm:max-w-3xl' : 'sm:max-w-xl',
         )}
       >
         <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-4">

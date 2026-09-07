@@ -32,6 +32,8 @@ function useViewHeading(library: ReturnType<typeof useLibrary>): { title: string
         return { title: 'No collection', subtitle: counted };
       case 'untagged':
         return { title: 'Untagged', subtitle: counted };
+      case 'attention':
+        return { title: 'Needs attention', subtitle: counted };
       case 'collection': {
         const collection = collections.find((item) => item.id === route.id);
         return {
@@ -523,6 +525,14 @@ function EmptyStateForRoute({
           icon={<Inbox size={22} aria-hidden />}
           title="Nothing here"
           message="Everything in your library is filed away."
+        />
+      );
+    case 'attention':
+      return (
+        <EmptyState
+          icon={<TriangleAlert size={22} aria-hidden />}
+          title="All links healthy"
+          message="Pocket checked your library and found no broken links."
         />
       );
     default:

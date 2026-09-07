@@ -79,7 +79,9 @@ export interface BookmarkQuery {
   pinned?: boolean;
   untagged?: boolean;
   uncollected?: boolean;
+  status?: MetadataStatus;
   sort?: SortKey;
   limit?: number;
   offset?: number;
 }
+

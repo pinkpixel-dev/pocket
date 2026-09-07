@@ -1,6 +1,7 @@
 import { db } from '../db/index.js';
 import type { Collection } from '../lib/types.js';
 import { badRequest, conflict, notFound } from '../lib/errors.js';
+import { ensureTagIds, normalizeTagName } from './tags.js';
 
 const COLLECTION_SELECT = `
   SELECT c.id, c.name, c.description, c.color, c.position, c.created_at AS createdAt,
@@ -85,3 +86,116 @@ export function findCollectionByName(name: string): Collection | undefined {
 export function ensureCollection(name: string): Collection {
   return findCollectionByName(name) ?? createCollection({ name });
 }
+
+export function mergeCollections(
+  sourceIds: number[],
+  targetId: number,
+): { movedCount: number; deletedCollections: number } {
+  const target = getCollection(targetId);
+  if (!target) throw notFound('Target collection not found.');
+
+  const validSources = sourceIds.filter((id) => id !== targetId);
+  if (validSources.length === 0) return { movedCount: 0, deletedCollections: 0 };
+
+  return db.transaction(() => {
+    let movedCount = 0;
+    const moveStmt = db.prepare(
+      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE collection_id = ?",
+    );
+    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ?');
+
+    for (const srcId of validSources) {
+      const updateResult = moveStmt.run(targetId, srcId);
+      movedCount += updateResult.changes;
+      deleteStmt.run(srcId);
+    }
+
+    return { movedCount, deletedCollections: validSources.length };
+  })();
+}
+
+const linkTagStmt = db.prepare('INSERT OR IGNORE INTO bookmark_tags (bookmark_id, tag_id) VALUES (?, ?)');
+
+export function convertCollectionsToTags(
+  collectionIds: number[],
+): { converted: number; bookmarksTagged: number } {
+  if (collectionIds.length === 0) return { converted: 0, bookmarksTagged: 0 };
+
+  return db.transaction(() => {
+    let converted = 0;
+    let bookmarksTagged = 0;
+    const selectBookmarks = db.prepare('SELECT id FROM bookmarks WHERE collection_id = ?');
+    const deleteStmt = db.prepare('DELETE FROM collections WHERE id = ?');
+
+    for (const id of collectionIds) {
+      const col = getCollection(id);
+      if (!col) continue;
+
+      const tagName = normalizeTagName(col.name);
+      if (tagName) {
+        const tagIds = ensureTagIds([tagName]);
+        const tagId = tagIds[0];
+        if (tagId) {
+          const rows = selectBookmarks.all(id) as Array<{ id: number }>;
+          for (const row of rows) {
+            linkTagStmt.run(row.id, tagId);
+            bookmarksTagged += 1;
+          }
+        }
+      }
+
+      deleteStmt.run(id);
+      converted += 1;
+    }
+
+    return { converted, bookmarksTagged };
+  })();
+}
+
+export function batchAssignBookmarksToCollection(
+  bookmarkIds: number[],
+  collectionId: number | null,
+): number {
+  if (bookmarkIds.length === 0) return 0;
+  if (collectionId !== null && !getCollection(collectionId)) {
+    throw notFound('Target collection not found.');
+  }
+
+  return db.transaction(() => {
+    const stmt = db.prepare(
+      "UPDATE bookmarks SET collection_id = ?, updated_at = datetime('now') WHERE id = ?",
+    );
+    let count = 0;
+    for (const id of bookmarkIds) {
+      const res = stmt.run(collectionId, id);
+      count += res.changes;
+    }
+    return count;
+  })();
+}
+
+export interface UncollectedDomainGroup {
+  domain: string;
+  count: number;
+  bookmarkIds: number[];
+}
+
+export function getUncollectedDomainStats(limit = 25): UncollectedDomainGroup[] {
+  const rows = db
+    .prepare(
+      `SELECT site_name AS domain, COUNT(*) AS count, GROUP_CONCAT(id) AS ids
+         FROM bookmarks
+        WHERE collection_id IS NULL AND site_name != ''
+        GROUP BY site_name
+        ORDER BY count DESC
+        LIMIT ?`,
+    )
+    .all(limit) as Array<{ domain: string; count: number; ids: string }>;
+
+  return rows.map((row) => ({
+    domain: row.domain,
+    count: row.count,
+    bookmarkIds: row.ids ? row.ids.split(',').map((s) => parseInt(s, 10)).filter(Number.isFinite) : [],
+  }));
+}
+

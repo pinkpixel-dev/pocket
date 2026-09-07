@@ -15,7 +15,7 @@ import { enqueueAiFill, enqueueEnrich } from '../services/queue.js';
 import { enrichBookmark } from '../services/enrich.js';
 import { isAiConfigured } from '../services/settings.js';
 import { badRequest } from '../lib/errors.js';
-import type { SortKey } from '../lib/types.js';
+import type { MetadataStatus, SortKey } from '../lib/types.js';
 
 export const bookmarksRouter = Router();
 
@@ -75,7 +75,7 @@ function parseBody<T extends z.ZodType>(schema: T, body: unknown): z.infer<T> {
 }
 
 bookmarksRouter.get('/', (req, res) => {
-  const { q, collection, tag, pinned, sort, limit, offset } = req.query;
+  const { q, collection, tag, pinned, status, sort, limit, offset } = req.query;
   const sortKey = typeof sort === 'string' && SORT_KEYS.includes(sort as SortKey) ? (sort as SortKey) : 'newest';
 
   const page = listBookmarks({
@@ -85,6 +85,10 @@ bookmarksRouter.get('/', (req, res) => {
     tag: tag === 'none' ? undefined : typeof tag === 'string' ? tag : undefined,
     untagged: tag === 'none',
     pinned: pinned === '1' || pinned === 'true',
+    status:
+      typeof status === 'string' && ['pending', 'ok', 'partial', 'failed', 'manual'].includes(status)
+        ? (status as MetadataStatus)
+        : undefined,
     sort: sortKey,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,

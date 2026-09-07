@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { api, ApiError } from '../../lib/api';
 import { useToast } from '../ui/Toaster';
 import { pluralize } from '../../lib/format';
-import type { ImportSummary } from '../../lib/types';
+import type { FolderStrategy, ImportSummary } from '../../lib/types';
 
 /** Matches the secondary Button, but stays an anchor so the download works. */
 const DOWNLOAD_LINK =
@@ -15,6 +15,11 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fetchMetadata, setFetchMetadata] = useState(true);
+  const [skipDeadLinks, setSkipDeadLinks] = useState(false);
+  const [yearMode, setYearMode] = useState<'all' | 'exact' | 'since' | 'before'>('all');
+  const [yearValue, setYearValue] = useState<number>(new Date().getFullYear());
+  const [folderStrategy, setFolderStrategy] = useState<FolderStrategy>('hierarchy');
+  const [defaultCollection, setDefaultCollection] = useState('');
   const [importing, setImporting] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
@@ -22,7 +27,14 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
     setImporting(true);
     setSummary(null);
     try {
-      const result = await api.importFile(file, fetchMetadata);
+      const result = await api.importFile(file, {
+        fetchMetadata,
+        skipDeadLinks,
+        yearFilter: yearMode === 'all' ? undefined : yearValue,
+        yearMode: yearMode === 'all' ? undefined : yearMode,
+        folderStrategy,
+        defaultCollection: defaultCollection.trim() || undefined,
+      });
       setSummary(result.summary);
       toast.success(`Imported ${pluralize(result.summary.imported, 'bookmark')}.`);
       onImported();
@@ -64,17 +76,91 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
           </p>
         </div>
 
-        <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.875rem] text-ink">
-          <input
-            type="checkbox"
-            checked={fetchMetadata}
-            onChange={(event) => setFetchMetadata(event.target.checked)}
-            className="h-4.5 w-4.5 shrink-0 accent-[var(--color-accent)]"
-          />
-          Fetch titles and previews after importing
-        </label>
+        <div className="flex flex-col gap-2 pt-1">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.875rem] text-ink">
+            <input
+              type="checkbox"
+              checked={fetchMetadata}
+              onChange={(event) => setFetchMetadata(event.target.checked)}
+              className="h-4.5 w-4.5 shrink-0 accent-[var(--color-accent)]"
+            />
+            Fetch titles and previews after importing
+          </label>
 
-        <div>
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-[0.875rem] text-ink">
+            <input
+              type="checkbox"
+              checked={skipDeadLinks}
+              onChange={(event) => setSkipDeadLinks(event.target.checked)}
+              className="h-4.5 w-4.5 shrink-0 accent-[var(--color-accent)]"
+            />
+            <span>
+              Skip dead links{' '}
+              <span className="text-ink-muted">(checks URLs and skips broken links)</span>
+            </span>
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2 pt-1 text-[0.875rem] text-ink">
+            <span className="text-ink-muted">Filter by date:</span>
+            <select
+              value={yearMode}
+              onChange={(e) => setYearMode(e.target.value as 'all' | 'exact' | 'since' | 'before')}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-[0.875rem] text-ink focus:border-accent focus:outline-none"
+              aria-label="Year filter mode"
+            >
+              <option value="all">All years (import all)</option>
+              <option value="exact">Only from year</option>
+              <option value="since">From year onwards</option>
+              <option value="before">Only before year</option>
+            </select>
+
+            {yearMode !== 'all' ? (
+              <input
+                type="number"
+                value={yearValue}
+                onChange={(e) => setYearValue(parseInt(e.target.value, 10) || new Date().getFullYear())}
+                min={1990}
+                max={2099}
+                className="w-24 rounded-lg border border-line bg-surface px-3 py-2 font-mono text-[0.875rem] text-ink focus:border-accent focus:outline-none"
+                aria-label="Filter year value"
+              />
+            ) : null}
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-1 text-[0.875rem] text-ink">
+            <label htmlFor="folder-strategy-select" className="text-ink-muted">
+              Folder organization:
+            </label>
+            <select
+              id="folder-strategy-select"
+              value={folderStrategy}
+              onChange={(e) => setFolderStrategy(e.target.value as FolderStrategy)}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-[0.875rem] text-ink focus:border-accent focus:outline-none"
+              aria-label="Folder organization strategy"
+            >
+              <option value="hierarchy">Smart hierarchy (Top folder = Collection, Subfolders = Tags)</option>
+              <option value="tags_only">Tags only (Turn all folders into tags)</option>
+              <option value="innermost">Innermost folder (Legacy Pocket behavior)</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5 pt-1 text-[0.875rem] text-ink">
+            <label htmlFor="default-collection-input" className="text-ink-muted">
+              Unorganized bookmarks collection <span className="text-ink-faint">(optional)</span>:
+            </label>
+            <input
+              id="default-collection-input"
+              type="text"
+              value={defaultCollection}
+              onChange={(e) => setDefaultCollection(e.target.value)}
+              placeholder="e.g. Inbox or Imported (leave blank for uncollected)"
+              maxLength={80}
+              className="rounded-lg border border-line bg-surface px-3 py-2 text-[0.875rem] text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="pt-2">
           <input
             ref={fileRef}
             type="file"
@@ -87,17 +173,19 @@ export function TransferPanel({ onImported }: { onImported: () => void }) {
           />
           <Button onClick={() => fileRef.current?.click()} loading={importing}>
             <Upload size={16} aria-hidden />
-            Choose a file
+            {importing ? 'Importing bookmarks...' : 'Choose a file'}
           </Button>
         </div>
 
         {summary ? (
-          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-3">
             {[
               { label: 'Imported', value: summary.imported },
+              { label: 'Dead links skipped', value: summary.deadLinks },
+              { label: 'Excluded by year', value: summary.yearFiltered },
               { label: 'Already saved', value: summary.duplicates },
               { label: 'Collections added', value: summary.collectionsCreated },
-              { label: 'Skipped', value: summary.skipped },
+              { label: 'Other skipped', value: summary.skipped },
             ].map((item) => (
               <div key={item.label} className="bg-surface px-3 py-2.5">
                 <dt className="text-[0.75rem] text-ink-faint">{item.label}</dt>

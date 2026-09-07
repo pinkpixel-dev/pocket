@@ -5,6 +5,7 @@ export type Route =
   | { kind: 'uncollected' }
   | { kind: 'tag'; name: string }
   | { kind: 'untagged' }
+  | { kind: 'attention' }
   | { kind: 'settings' };
 
 export function parseRoute(hash: string): Route {
@@ -20,6 +21,9 @@ export function parseRoute(hash: string): Route {
       return { kind: 'uncollected' };
     case 'untagged':
       return { kind: 'untagged' };
+    case 'attention':
+    case 'broken':
+      return { kind: 'attention' };
     case 'collections': {
       const id = Number(tail);
       return Number.isFinite(id) && id > 0 ? { kind: 'collection', id } : { kind: 'all' };
@@ -41,6 +45,8 @@ export function routeHref(route: Route): string {
       return '#/uncollected';
     case 'untagged':
       return '#/untagged';
+    case 'attention':
+      return '#/attention';
     case 'collection':
       return `#/collections/${route.id}`;
     case 'tag':

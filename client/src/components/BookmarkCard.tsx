@@ -204,9 +204,9 @@ export function BookmarkCard({ bookmark, collection, size, busy, ...actions }: C
           <span aria-hidden>·</span>
           <time dateTime={bookmark.createdAt}>{relativeTime(bookmark.createdAt)}</time>
           {failed ? (
-            <span className="inline-flex items-center gap-1 text-danger" title={bookmark.metadataError ?? ''}>
+            <span className="inline-flex items-center gap-1 text-danger" title={bookmark.metadataError ?? 'Link could not be reached'}>
               <AlertTriangle size={11} aria-hidden />
-              no preview
+              broken link
             </span>
           ) : null}
           {bookmark.aiStatus === 'pending' ? (

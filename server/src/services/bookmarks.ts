@@ -74,6 +74,11 @@ export function listBookmarks(query: BookmarkQuery = {}): BookmarkPage {
     params.tag = query.tag;
   }
 
+  if (query.status) {
+    where.push('b.metadata_status = @status');
+    params.status = query.status;
+  }
+
   const search = query.search?.trim();
   if (search) {
     where.push(
