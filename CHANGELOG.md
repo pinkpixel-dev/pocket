@@ -6,7 +6,7 @@ All notable changes to Pocket are recorded here. This project follows [semantic 
 
 ### 🎨 Appearance
 
-- Add accent color selection in Settings Appearance with eight options: Red, Orange, Gold (default), Lime green, Cyan, Blue, Purple, and Pink
+- Add accent color selection in Settings Appearance with eight options: Gold (default), Blue, Red, Green, Cyan, Purple, Pink, and Teal
 - Synchronize the Pocket logo color to match the chosen accent using tuned CSS hue and saturation filters
 - Persist accent preference in local storage with immediate pre-mount initialization to eliminate theme flashing
 

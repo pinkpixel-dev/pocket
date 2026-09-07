@@ -85,13 +85,13 @@ export type ViewMode = 'grid' | 'list';
 export type CardSize = 'small' | 'medium' | 'large';
 export type AccentColor =
   | 'gold'
+  | 'blue'
   | 'red'
-  | 'orange'
   | 'lime-green'
   | 'cyan'
-  | 'blue'
   | 'purple'
-  | 'pink';
+  | 'pink'
+  | 'teal';
 
 export interface BookmarkDraft {
   url: string;

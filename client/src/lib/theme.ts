@@ -16,26 +16,6 @@ export const DEFAULT_ACCENT: AccentColor = 'gold';
 
 export const ACCENT_COLORS: readonly AccentDefinition[] = [
   {
-    id: 'red',
-    name: 'Red',
-    accent: 'oklch(0.68 0.22 25)',
-    accentHover: 'oklch(0.73 0.20 25)',
-    accentInk: 'oklch(0.18 0.05 25)',
-    accentSoft: 'oklch(0.68 0.22 25 / 0.16)',
-    logoFilter: 'hue-rotate(318deg) saturate(1.15)',
-    swatch: 'oklch(0.68 0.22 25)',
-  },
-  {
-    id: 'orange',
-    name: 'Orange',
-    accent: 'oklch(0.74 0.19 50)',
-    accentHover: 'oklch(0.79 0.18 50)',
-    accentInk: 'oklch(0.20 0.05 50)',
-    accentSoft: 'oklch(0.74 0.19 50 / 0.15)',
-    logoFilter: 'hue-rotate(344deg)',
-    swatch: 'oklch(0.74 0.19 50)',
-  },
-  {
     id: 'gold',
     name: 'Gold',
     accent: 'oklch(0.795 0.146 71)',
@@ -44,6 +24,26 @@ export const ACCENT_COLORS: readonly AccentDefinition[] = [
     accentSoft: 'oklch(0.795 0.146 71 / 0.14)',
     logoFilter: 'none',
     swatch: 'oklch(0.795 0.146 71)',
+  },
+  {
+    id: 'blue',
+    name: 'Blue',
+    accent: 'oklch(0.62 0.24 260)',
+    accentHover: 'oklch(0.67 0.22 260)',
+    accentInk: 'oklch(0.98 0 0)',
+    accentSoft: 'oklch(0.62 0.24 260 / 0.16)',
+    logoFilter: 'hue-rotate(188deg) saturate(1.25)',
+    swatch: 'oklch(0.62 0.24 260)',
+  },
+  {
+    id: 'red',
+    name: 'Red',
+    accent: 'oklch(0.68 0.22 25)',
+    accentHover: 'oklch(0.73 0.20 25)',
+    accentInk: 'oklch(0.18 0.05 25)',
+    accentSoft: 'oklch(0.68 0.22 25 / 0.16)',
+    logoFilter: 'hue-rotate(318deg) saturate(1.15)',
+    swatch: 'oklch(0.68 0.22 25)',
   },
   {
     id: 'lime-green',
@@ -66,16 +66,6 @@ export const ACCENT_COLORS: readonly AccentDefinition[] = [
     swatch: 'oklch(0.78 0.14 205)',
   },
   {
-    id: 'blue',
-    name: 'Blue',
-    accent: 'oklch(0.70 0.17 250)',
-    accentHover: 'oklch(0.75 0.16 250)',
-    accentInk: 'oklch(0.98 0 0)',
-    accentSoft: 'oklch(0.70 0.17 250 / 0.16)',
-    logoFilter: 'hue-rotate(184deg) saturate(1.1)',
-    swatch: 'oklch(0.70 0.17 250)',
-  },
-  {
     id: 'purple',
     name: 'Purple',
     accent: 'oklch(0.72 0.18 300)',
@@ -95,12 +85,23 @@ export const ACCENT_COLORS: readonly AccentDefinition[] = [
     logoFilter: 'hue-rotate(289deg) saturate(1.1)',
     swatch: 'oklch(0.75 0.18 345)',
   },
+  {
+    id: 'teal',
+    name: 'Teal',
+    accent: 'oklch(0.75 0.15 172)',
+    accentHover: 'oklch(0.80 0.14 172)',
+    accentInk: 'oklch(0.18 0.05 172)',
+    accentSoft: 'oklch(0.75 0.15 172 / 0.15)',
+    logoFilter: 'hue-rotate(116deg) saturate(1.1)',
+    swatch: 'oklch(0.75 0.15 172)',
+  },
 ] as const;
 
 export function normalizeAccentId(id: string | null | undefined): AccentColor {
   if (!id) return DEFAULT_ACCENT;
   const clean = id.trim().toLowerCase();
-  if (clean === 'lime green' || clean === 'lime-green') return 'lime-green';
+  if (clean === 'orange') return 'teal';
+  if (clean === 'green' || clean === 'lime green' || clean === 'lime-green') return 'lime-green';
   const found = ACCENT_COLORS.find((item) => item.id === clean);
   return found ? found.id : DEFAULT_ACCENT;
 }
@@ -108,7 +109,7 @@ export function normalizeAccentId(id: string | null | undefined): AccentColor {
 export function getAccentDefinition(id: string | null | undefined): AccentDefinition {
   const normalized = normalizeAccentId(id);
   const found = ACCENT_COLORS.find((item) => item.id === normalized);
-  return (found ?? ACCENT_COLORS[2]) as AccentDefinition;
+  return (found ?? ACCENT_COLORS[0]) as AccentDefinition;
 }
 
 export function applyAccent(id: string | null | undefined): void {
